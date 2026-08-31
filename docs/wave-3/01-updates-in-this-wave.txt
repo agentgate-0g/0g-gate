@@ -15,9 +15,9 @@ Try it with no keys and no setup:
   curl -i https://0g-gateway.mdloglabs.org/svc/1   (a real HTTP 402 invoice)
 
 Shipped:
-- CLI, MCP server and SDK published to npm as agentgate-0g (now 1.0.3). Reads need no key, no config and no API key — every read is a public-RPC view call.
+- CLI, MCP server and SDK published to npm as agentgate-0g (now 1.0.3): https://www.npmjs.com/package/agentgate-0g — reads need no key, no config and no API key, since every read is a public-RPC view call.
 - Gateway live at https://0g-gateway.mdloglabs.org, serving 402 invoices priced from the contract's on-chain accepts[] list.
-- Repo: https://github.com/agentgate-0g/0g-gate — CI green, 449 TypeScript tests and 42 Foundry tests.
+- Repo: https://github.com/agentgate-0g/0g-gate — CI green, 460 TypeScript tests and 42 Foundry tests.
 
 Engineering notes worth reporting honestly:
 - Binding a payment to an invoice. A native transfer carries no reference to what it pays for, so a tx hash alone cannot prove which invoice was settled — one payment could be replayed across many calls. PaymentRouter.pay(serviceId, nonce, payTo) forwards msg.value without ever custodying funds and emits an indexed Paid event, so verification is one receipt lookup matched on both service and nonce, and the gateway burns the nonce once it serves.

@@ -7,7 +7,7 @@ paste. There is nothing to strip afterwards.
 
 | Form field | File | Length |
 |---|---|---|
-| Updates in this Wave | [`wave-3/01-updates-in-this-wave.txt`](./wave-3/01-updates-in-this-wave.txt) | 2,860 of 3,000 |
+| Updates in this Wave | [`wave-3/01-updates-in-this-wave.txt`](./wave-3/01-updates-in-this-wave.txt) | 2,910 of 3,000 |
 | Milestone → 4th Wave | [`wave-3/02-milestone-4th-wave.txt`](./wave-3/02-milestone-4th-wave.txt) | 894 of 900 |
 | Milestone → 5th Wave | [`wave-3/03-milestone-5th-wave.txt`](./wave-3/03-milestone-5th-wave.txt) | 886 of 900 |
 
@@ -53,8 +53,8 @@ npx vitest run 2>&1 | tail -3
 (cd contracts-evm && forge test 2>&1 | tail -1)
 ```
 
-Last verified 2026-08-31: npm `1.0.3`, gateway `402`, CI `e0633869 success`,
-`449` vitest, `42` forge. Field 1 quotes exactly those.
+Last verified 2026-08-31: npm `1.0.3`, gateway `402`, CI green on `5d97595`,
+`460` vitest, `42` forge. Field 1 quotes exactly those.
 
 Re-measure a field's length after editing it:
 
