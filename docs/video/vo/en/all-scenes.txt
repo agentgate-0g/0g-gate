@@ -1,0 +1,13 @@
+AI agents can't pay for anything. No cards, no logins, no accounts. So today an agent borrows a human's API key, or goes without the data. AgentGate fixes that on zero-G. One command turns any HTTP API into a paid, on-chain service.
+
+This is the live catalog of services registered on zero-G, read from an empty directory. No clone, no config file, no API key. Not even a wallet. Every read goes straight to the registry contract over public RPC. There's no indexer anywhere. One command, and any agent can discover what's for sale.
+
+Ask the gateway for that service and you get a real HTTP four-oh-two, priced from the contract's own list. It's the x-four-oh-two envelope, but look at the scheme name. Exact-settled, not exact. Zero-G has no facilitator, so the buyer settles first and presents the transaction hash. We don't claim compliance we don't have. And the nonce changes every single call.
+
+The whole loop, end to end. Register, four-oh-two, pay, serve, attest, score. The buyer pays through the Payment Router contract, which binds that payment to the invoice nonce on-chain and rejects a replay. So the gateway verifies with one log lookup on the receipt. No scanning, no indexer, no facilitator, and the gateway never holds a cent. This run is on the mock chain, so it finishes in under a second. The same code path runs against zero-G Galileo.
+
+And this is the same system reading zero-G back. Every registration, every payment, every attestation, written on-chain and read straight off it. That's why the trust score means something. It isn't a star rating anyone can farm. It counts payments that actually settled. Pay for your own service and you still get served, but you're never scored. Every row links to the public explorer. Check any of it yourself.
+
+And you don't have to use our CLI. One line of config, and any MCP-capable agent gets discover, inspect and pay as native tools, under a spend cap. The three read tools need no key at all. The same NPM package is also an importable SDK. CLI, MCP server and library, one install.
+
+Contracts, gateway, CLI and SDK are live on zero-G Galileo today. One thing isn't. Our hosted dashboard still runs the old build. That's next. Try it: N-P-X agentgate zero-G list.

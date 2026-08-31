@@ -1,0 +1,1 @@
+Kontrak, gateway, CLI dan SDK sudah live di zero-G Galileo hari ini. Satu hal belum. Dashboard yang kami host masih build lama. Itu prioritas berikutnya. Coba: N-P-X agentgate zero-G list.

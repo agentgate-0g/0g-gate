@@ -1,0 +1,13 @@
+Agen AI tidak bisa membayar apa pun. Tidak punya kartu, login, atau akun. Jadi hari ini agen meminjam API key milik manusia, atau tidak dapat datanya sama sekali. AgentGate menyelesaikan itu di zero-G. Satu perintah mengubah API HTTP apa pun jadi layanan berbayar on-chain.
+
+Ini katalog layanan yang terdaftar on-chain di zero-G, dibaca dari direktori kosong. Tanpa clone, tanpa file konfigurasi, tanpa API key. Bahkan tanpa wallet. Setiap pembacaan langsung ke kontrak registry lewat RPC publik. Tidak ada indexer sama sekali. Satu perintah, dan agen mana pun bisa menemukan apa yang dijual.
+
+Minta layanan itu ke gateway, dan Anda dapat HTTP empat-nol-dua sungguhan, harganya dibaca dari daftar di kontraknya sendiri. Amplopnya x-empat-nol-dua, tapi lihat nama skemanya. Exact-settled, bukan exact. Zero-G tidak punya facilitator, jadi pembeli membayar lebih dulu lalu menunjukkan hash transaksinya. Kami tidak mengklaim kepatuhan yang tidak kami punya. Dan nonce-nya berubah setiap panggilan.
+
+Keseluruhan alurnya, dari awal sampai akhir. Daftarkan, empat-nol-dua, bayar, kirim data, catat atestasi, beri skor. Pembeli membayar lewat kontrak Payment Router, yang mengikat pembayaran itu ke nonce invoice secara on-chain dan menolak replay. Jadi gateway cukup satu pencarian log di receipt. Tanpa scanning, tanpa indexer, tanpa facilitator, dan gateway tidak pernah memegang dana. Ini berjalan di mock chain, jadi selesai di bawah satu detik. Jalur kode yang sama berjalan terhadap zero-G Galileo.
+
+Dan ini sistem yang sama membaca kembali dari zero-G. Setiap registrasi, setiap pembayaran, setiap atestasi, ditulis on-chain dan dibaca langsung dari sana. Itu sebabnya skor kepercayaannya berarti. Bukan rating bintang yang bisa dikarang. Ini menghitung pembayaran yang benar-benar tersettle. Bayar layanan Anda sendiri, tetap dilayani, tapi tidak pernah diberi skor. Setiap baris tertaut ke explorer publik.
+
+Dan Anda tidak harus memakai CLI kami. Satu baris konfigurasi, dan agen apa pun yang mendukung MCP langsung punya tool discover, inspect, dan pay secara native, dengan batas belanja. Tiga tool baca sama sekali tidak butuh key. Paket NPM yang sama juga bisa di-import sebagai SDK.
+
+Kontrak, gateway, CLI dan SDK sudah live di zero-G Galileo hari ini. Satu hal belum. Dashboard yang kami host masih build lama. Itu prioritas berikutnya. Coba: N-P-X agentgate zero-G list.

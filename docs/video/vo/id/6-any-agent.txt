@@ -1,0 +1,1 @@
+Dan Anda tidak harus memakai CLI kami. Satu baris konfigurasi, dan agen apa pun yang mendukung MCP langsung punya tool discover, inspect, dan pay secara native, dengan batas belanja. Tiga tool baca sama sekali tidak butuh key. Paket NPM yang sama juga bisa di-import sebagai SDK.

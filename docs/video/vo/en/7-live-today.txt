@@ -1,0 +1,1 @@
+Contracts, gateway, CLI and SDK are live on zero-G Galileo today. One thing isn't. Our hosted dashboard still runs the old build. That's next. Try it: N-P-X agentgate zero-G list.

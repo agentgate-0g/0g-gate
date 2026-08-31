@@ -1,0 +1,1 @@
+Ini katalog layanan yang terdaftar on-chain di zero-G, dibaca dari direktori kosong. Tanpa clone, tanpa file konfigurasi, tanpa API key. Bahkan tanpa wallet. Setiap pembacaan langsung ke kontrak registry lewat RPC publik. Tidak ada indexer sama sekali. Satu perintah, dan agen mana pun bisa menemukan apa yang dijual.

@@ -1,0 +1,1 @@
+This is the live catalog of services registered on zero-G, read from an empty directory. No clone, no config file, no API key. Not even a wallet. Every read goes straight to the registry contract over public RPC. There's no indexer anywhere. One command, and any agent can discover what's for sale.

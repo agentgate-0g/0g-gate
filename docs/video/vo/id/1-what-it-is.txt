@@ -1,0 +1,1 @@
+Agen AI tidak bisa membayar apa pun. Tidak punya kartu, login, atau akun. Jadi hari ini agen meminjam API key milik manusia, atau tidak dapat datanya sama sekali. AgentGate menyelesaikan itu di zero-G. Satu perintah mengubah API HTTP apa pun jadi layanan berbayar on-chain.

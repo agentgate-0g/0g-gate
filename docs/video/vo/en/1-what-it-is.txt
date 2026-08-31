@@ -1,0 +1,1 @@
+AI agents can't pay for anything. No cards, no logins, no accounts. So today an agent borrows a human's API key, or goes without the data. AgentGate fixes that on zero-G. One command turns any HTTP API into a paid, on-chain service.

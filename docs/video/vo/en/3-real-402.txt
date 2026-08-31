@@ -1,0 +1,1 @@
+Ask the gateway for that service and you get a real HTTP four-oh-two, priced from the contract's own list. It's the x-four-oh-two envelope, but look at the scheme name. Exact-settled, not exact. Zero-G has no facilitator, so the buyer settles first and presents the transaction hash. We don't claim compliance we don't have. And the nonce changes every single call.

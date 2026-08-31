@@ -1,0 +1,1 @@
+And you don't have to use our CLI. One line of config, and any MCP-capable agent gets discover, inspect and pay as native tools, under a spend cap. The three read tools need no key at all. The same NPM package is also an importable SDK. CLI, MCP server and library, one install.
