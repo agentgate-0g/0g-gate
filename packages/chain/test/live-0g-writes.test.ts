@@ -220,6 +220,29 @@ describe('Live0gClient writes', () => {
     expect(latest!.recordTxHash).toMatch(/^0x[0-9a-f]{64}$/i);
   });
 
+  it('finds an attestation written after the block height was already cached', async () => {
+    // The join above passes by luck unless the block height is read fresh. viem
+    // caches getBlockNumber for its polling interval, and that value is the
+    // window's `toBlock` — so a warm cache ends the window BELOW a block mined
+    // seconds later, and the caller cannot see its own write. This test warms
+    // the cache on purpose, then writes and immediately reads back: with a
+    // cached height it returns '', which is precisely the bug the join exists
+    // to prevent. It failed in CI and passed locally until it was pinned here.
+    await client.ping(); // ping() reads the height through viem's default cache
+
+    const { txHash: payTx } = await client.transfer(
+      { to: seller.address, amountWei: '1000000000000000', nonce: '5151', serviceId: 1 },
+      buyerSigner,
+    );
+    const { txHash: attestTx } = await client.recordAttestation(
+      { serviceId: 1, paymentTxHash: payTx, success: true },
+      gateSigner,
+    );
+
+    const [latest] = await client.listAttestations(1, 1);
+    expect(latest!.recordTxHash).toBe(attestTx);
+  });
+
   it('setActive toggles the discovery flag', async () => {
     await client.setActive(1, false, signer);
     expect((await client.getService(1))!.active).toBe(false);

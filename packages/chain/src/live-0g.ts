@@ -246,7 +246,12 @@ export class Live0gClient implements ChainClient {
     // every live attestation carries an empty hash: the CLI prints a dangling
     // "tx ", the dashboard renders a link to nowhere, and — because the list is
     // keyed by it — React sees every row as the same key.
-    const latest = await this.pub.getBlockNumber();
+    // cacheTime: 0 is load-bearing. viem caches getBlockNumber for its polling
+    // interval (~4s) by default, so a block mined moments ago can still be
+    // missing from the cached height — and this value is `toBlock`, so the
+    // window would silently end BELOW the event just written. The caller reads
+    // its own fresh write and gets nothing back.
+    const latest = await this.pub.getBlockNumber({ cacheTime: 0 });
     const lookback = BigInt(this.cfg.activityLookbackBlocks);
     const logs = await this.pub.getLogs({
       address: registry,
@@ -297,7 +302,12 @@ export class Live0gClient implements ChainClient {
     // answers CONTRACT_NOT_DEPLOYED immediately instead of paying a round-trip
     // to learn what its own config already knew.
     const registry = this.registry();
-    const latest = await this.pub.getBlockNumber();
+    // cacheTime: 0 is load-bearing. viem caches getBlockNumber for its polling
+    // interval (~4s) by default, so a block mined moments ago can still be
+    // missing from the cached height — and this value is `toBlock`, so the
+    // window would silently end BELOW the event just written. The caller reads
+    // its own fresh write and gets nothing back.
+    const latest = await this.pub.getBlockNumber({ cacheTime: 0 });
     const lookback = BigInt(this.cfg.activityLookbackBlocks);
     const fromBlock = latest > lookback ? latest - lookback : 0n;
     const range = { fromBlock, toBlock: latest, strict: true } as const;
