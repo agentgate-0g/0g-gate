@@ -116,9 +116,11 @@ rate limiter keys off the real client IP, then restart the unit.
 
 - **A — add a public hostname to the existing (dashboard) tunnel** (fastest, no
   second process): Cloudflare **Zero Trust → Networks → Tunnels →** the dashboard
-  tunnel **→ Public Hostnames → Add** → subdomain `gateway`, domain
+  tunnel **→ Public Hostnames → Add** → subdomain `0g-gateway`, domain
   `mdloglabs.org`, service `HTTP → localhost:4021`. Done — no CLI, no code change
-  (`DEFAULT_GATEWAY_URL` already points here).
+  (`DEFAULT_GATEWAY_URL` already points here). The `0g-` prefix is not optional:
+  `gateway.mdloglabs.org` is the retired Casper deployment, and pointing this
+  tunnel there registers services against a different chain's registry.
 
 - **B — a dedicated locally-managed tunnel** (all CLI; uses the existing
   `~/.cloudflared/cert.pem`):

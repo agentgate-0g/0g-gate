@@ -7,7 +7,10 @@ import { DEFAULT_REGISTRY_ADDRESS, DEFAULT_ZG_EXPLORER_URL, DEFAULT_ZG_NETWORK }
  */
 export const DOCS_VERSION = {
   cli: '1.0.1', // agentgate-0g
-  sdk: '0.1.0', // @agentgate/client
+  // Same package: agentgate-0g ships the CLI and the SDK from one tarball.
+  // @agentgate/client is an internal workspace package and is never published,
+  // so its version means nothing to a reader — this must track the published one.
+  sdk: '1.0.1', // agentgate-0g (same package as the CLI)
   network: DEFAULT_ZG_NETWORK,
   chainId: 16602,
   explorerUrl: DEFAULT_ZG_EXPLORER_URL,

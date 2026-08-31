@@ -8,8 +8,13 @@
 //
 // gateway  → live 402 middleware on :4021 (reads root .env via scripts/live.ts)
 // dashboard → next start on :3000 (reads dashboard/.env.local)
-const REPO = '/home/mdlog/Project-MDlabs/Dorahacks/casper';
-const NODE_BIN = '/home/mdlog/.nvm/versions/node/v22.10.0/bin';
+// Derived, never hardcoded. These pointed at a different checkout (the Casper-era
+// tree, which still exists on this box) and at a node version that had moved on —
+// so `pm2 start` would happily boot the wrong application. __dirname is this file's
+// own home, and process.execPath is the node actually running pm2.
+const path = require('node:path');
+const REPO = path.resolve(__dirname, '..');
+const NODE_BIN = path.dirname(process.execPath);
 
 module.exports = {
   apps: [

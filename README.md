@@ -317,7 +317,7 @@ None of the three is upgradable — there is no proxy, so a redeploy is a **new 
 
 **Next**
 
-- Deploy the three contracts to 0G Galileo and re-point the hosted gateway + dashboard
+- Re-point the hosted dashboard at 0G — the contracts are deployed and the hosted gateway already serves them, but https://agentgate.mdloglabs.org still runs the pre-migration build
 - ERC-20 rail over the existing on-chain `accepts[]` (a client change, not a contract change)
 - Wire `SpendGuard` into the request path as an on-chain spend firewall
 - Staking-weighted attestations with slashing

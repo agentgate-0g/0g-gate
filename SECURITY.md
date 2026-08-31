@@ -4,8 +4,8 @@
 
 | Version | Supported |
 | ------- | --------- |
-| `agentgate-0g` latest (0.1.x) | ✅ |
-| older pre-release snapshots | ❌ |
+| `agentgate-0g` latest (1.0.x) | ✅ |
+| `@mdlog/agentgate` (0.1.x–0.2.x, Casper) | ❌ — retired with the chain it ran on |
 
 The on-chain contracts currently supported are the 0G Galileo Testnet
 (chain ID 16602) deployments of `AgentGateRegistry`, `PaymentRouter` and

@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
+// Read from the manifest rather than a second constant: a hand-maintained
+// version silently drifts from the one that was actually published, and the
+// whole point of --version is telling the user which build they are running.
+// resolveJsonModule is on and tsup inlines this, so it costs nothing at runtime.
+import { version as CLI_VERSION } from '../package.json';
 import { createChainClient } from '@agentgate/chain';
 import {
   AgentGateError,
@@ -75,6 +80,7 @@ const program = new Command();
 
 program
   .name('agentgate')
+  .version(CLI_VERSION, '-v, --version', 'print the installed version')
   .description('AgentGate — wrap any API into a 402-paywalled, on-chain-registered service');
 
 withConfigFlags(
@@ -85,7 +91,7 @@ withConfigFlags(
     .requiredOption('--price <og>', 'price per call in OG (e.g. 0.5)')
     .requiredOption('--name <name>', 'service name')
     .option('--description <d>', 'service description', '')
-    .option('--gateway <url>', 'gateway base URL (default: http://localhost:<MIDDLEWARE_PORT|4021>)')
+    .option('--gateway <url>', 'gateway base URL (default: the hosted gateway in live mode)')
     .option(
       '--payment-target <address>',
       'payment target address (default: derived from the seller signer)',

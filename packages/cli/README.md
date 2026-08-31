@@ -60,7 +60,7 @@ Every config value can be given as a flag **or** an env var; precedence is **fla
 | `--mode <mock\|live>` | `AGENTGATE_MODE` | all (CLI defaults to `live`) |
 | `--rpc-url <url>` | `ZG_RPC_URL` | all (defaults to `https://evmrpc-testnet.0g.ai`) |
 | `--registry <address>` | `REGISTRY_CONTRACT_ADDRESS` | all (defaults to the deployed registry) |
-| `--gateway <url>` | — | wrap (defaults to the hosted gateway in live) · buy (defaults to the service's on-chain endpoint) |
+| `--gateway <url>` | — | wrap, map (default to the hosted gateway in live) · buy (defaults to the service's on-chain endpoint) |
 | `--key <0xhex>` | `SELLER_SIGNER_KEY` (wrap/pause/resume) · `BUYER_SIGNER_KEY` (buy/mcp) | live writes — your wallet key |
 | `--max <og>` | — | buy: refuse invoices priced above this many OG |
 | `--admin-token <token>` | `AGENTGATE_ADMIN_TOKEN` | mock / self-hosted-admin mapping only |
@@ -76,6 +76,7 @@ On an invalid value the CLI fails fast with a clear one-line message (e.g. `erro
 - `list` — list on-chain services (zero-config)
 - `status <id>` — service detail + reputation + attestation history (zero-config)
 - `wrap <url> --price <OG> --name <name>` — register + put a 402 paywall in front of an API
+- `map <id> <url>` — point the gateway at a service that is **already registered**. This is the recovery path when `wrap`'s on-chain registration lands but the gateway mapping does not: re-running `wrap` would register a *second* service and cost gas again, and the registration cannot be undone
 - `buy <id>` — pay a service's 402 invoice and print the response (`--max` caps the price)
 - `mcp` — serve AgentGate as an MCP stdio server (agent tools: list / inspect / buy)
 - `pause <id>` / `resume <id>` — toggle a service you own

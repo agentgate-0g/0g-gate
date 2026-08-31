@@ -1,3 +1,4 @@
+import { version as CLI_VERSION } from '../package.json';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -37,7 +38,10 @@ export interface McpServerDeps {
 }
 
 const MCP_NAME = 'agentgate';
-const MCP_VERSION = '1.0.1';
+// From the manifest, not a literal. A hand-kept copy drifts from the version
+// that was actually published, and this one is reported to MCP clients as the
+// server's identity — a wrong answer there is worse than no answer.
+const MCP_VERSION = CLI_VERSION;
 
 interface ToolTextResult {
   [x: string]: unknown;
@@ -218,7 +222,7 @@ export async function startAgentGateMcpServer(deps: McpServerDeps): Promise<void
   // Without this, running `agentgate mcp` in a terminal looks like it hangs; it
   // is in fact a stdio server waiting for an MCP client to speak on stdin.
   process.stderr.write(
-    'AgentGate MCP server ready on stdio — tools: agentgate_list_services, ' +
+    `AgentGate MCP server v${MCP_VERSION} ready on stdio — tools: agentgate_list_services, ` +
       'agentgate_get_service, agentgate_get_invoice, agentgate_buy.\n' +
       'It speaks JSON-RPC over stdin/stdout and waits for an MCP client ' +
       '(e.g. Claude Desktop). No further output here is normal — this is not a hang.\n',

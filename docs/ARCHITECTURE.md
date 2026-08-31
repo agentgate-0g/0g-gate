@@ -1,7 +1,7 @@
 # AgentGate — Architecture
 
 > Companion to [SPEC.md](./SPEC.md) (the authoritative engineering contract) and the
-> [PRD](../AgentGate-PRD-Solo-Build-Plan.md). This file explains how the pieces fit.
+> [SPEC](./SPEC.md). This file explains how the pieces fit.
 
 ## The loop
 
