@@ -49,7 +49,14 @@ module.exports = {
       args: 'run start',
       interpreter: 'none',
       autorestart: true,
-      env: { NODE_ENV: 'production', PATH: `${NODE_BIN}:${process.env.PATH || ''}` },
+      env: {
+        NODE_ENV: 'production',
+        PATH: `${NODE_BIN}:${process.env.PATH || ''}`,
+        // Explicit: `next start` defaults to 3000, which is already taken on
+        // this box by an unrelated app. A dashboard that silently fails to bind
+        // looks identical to one that is merely slow to boot.
+        PORT: process.env.DASHBOARD_PORT || '13000',
+      },
     },
   ],
 };
