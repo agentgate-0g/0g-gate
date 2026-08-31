@@ -2,11 +2,16 @@
 // existing PM2 setup). Usage:
 //
 //   pm2 start deploy/agentgate.ecosystem.config.cjs        # both apps
-//   pm2 start deploy/agentgate.ecosystem.config.cjs --only agentgate-gateway
+//   pm2 start deploy/agentgate.ecosystem.config.cjs --only agentgate-0g-gateway
 //   pm2 save                                               # persist across reboot
 //   pm2 logs agentgate-gateway
 //
-// gateway  → live 402 middleware on :4021 (reads root .env via scripts/live.ts)
+// The names carry the 0g- prefix on purpose. A pm2 app named `agentgate-gateway`
+// already exists on this box, pointing at an unrelated older checkout, and
+// `pm2 start` matches on NAME, not on path: starting this file under the bare
+// name restarted that other app instead and took this gateway offline.
+//
+// gateway  → live 402 middleware (port from MIDDLEWARE_PORT in the root .env)
 // dashboard → next start on :3000 (reads dashboard/.env.local)
 // Derived, never hardcoded. These pointed at a different checkout (the Casper-era
 // tree, which still exists on this box) and at a node version that had moved on —
@@ -19,7 +24,7 @@ const NODE_BIN = path.dirname(process.execPath);
 module.exports = {
   apps: [
     {
-      name: 'agentgate-gateway',
+      name: 'agentgate-0g-gateway',
       cwd: REPO,
       script: 'npm',
       args: 'run dev:live',
@@ -38,7 +43,7 @@ module.exports = {
       },
     },
     {
-      name: 'agentgate-dashboard',
+      name: 'agentgate-0g-dashboard',
       cwd: `${REPO}/dashboard`,
       script: 'npm',
       args: 'run start',
