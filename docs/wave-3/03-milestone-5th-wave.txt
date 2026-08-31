@@ -1,0 +1,9 @@
+Make reputation cost something, and extend the loop beyond HTTP APIs.
+
+1. Staking-weighted attestations with slashing. Today a score counts payments: every point is backed by a real transaction, which makes it expensive to forge but still unstaked — a seller risks nothing by serving badly. The plan is for attestors to stake OG behind their attestations and lose it when a served call is provably wrong, so reputation carries downside and not only cost. Done when a staked attestation can be challenged on-chain and a successful challenge slashes the stake, with the score recomputed from stake-weighted rather than count-weighted history.
+
+2. Agent-to-agent payment. The same 402 loop that prices an HTTP API prices anything metered per call — including 0G's own inference and storage. Done when a service in the registry is itself an agent selling compute rather than proxying a third-party API, and one agent pays another through PaymentRouter with no human key involved at either end.
+
+Why this order: the rail has to be general and budget-safe (Wave 4) before it is worth staking on (Wave 5). Slashing without on-chain budget enforcement would let a buyer overspend into a dispute it cannot afford, and staking on a single-asset rail limits who can participate.
+
+Each milestone lands the same way as this Wave's work: contract tests in Foundry, TypeScript tests on the client, and a real transaction on Galileo with its explorer link published, so every claim on this page stays checkable.

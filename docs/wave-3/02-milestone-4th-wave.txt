@@ -1,0 +1,9 @@
+Make the rail general and enforce budgets on-chain.
+
+1. ERC-20 payments. Services already store an on-chain accepts[] price list, so a second asset needs no contract change to the registry — only a router path that pulls an ERC-20 instead of forwarding msg.value, and a client that picks an entry from accepts[]. Done when one service quotes both OG and a test ERC-20 in the same 402 invoice and a buyer settles either one, with both attested.
+
+2. SpendGuard in the request path. The contract is deployed but nothing calls it: budgets are enforced in the client today, which means an agent enforces its own spending limit. Done when a buyer's cap is checked on-chain before the payment lands, and a transaction exceeding it reverts rather than being refused politely by the caller.
+
+3. Hosted dashboard on 0G. The gateway and CLI migrated this Wave; agentgate.mdloglabs.org still serves the pre-migration build. Done when it reads the Galileo registry live, with the catalog, activity feed and per-service attestation history backed by the deployed contracts.
+
+4. Published types that stand alone. The shipped .d.ts still names the ambient RequestInit, Response and fetch, so a consumer compiling with neither lib.dom nor @types/node cannot use the package. Done when a TypeScript project with lib set to ES2022 and no ambient types compiles against agentgate-0g cleanly.
