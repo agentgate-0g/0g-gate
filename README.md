@@ -313,7 +313,7 @@ None of the three is upgradable — there is no proxy, so a redeploy is a **new 
 - On-chain `accepts[]` price list — multi-asset shape stored in the contract
 - Indexer-free chain client — viem view calls + `eth_getLogs`, no API key in the read path
 - MCP server for any agent framework — `npx agentgate-0g mcp`
-- CLI **v1.0.2**
+- CLI **v1.0.3**
 
 **Next**
 

@@ -32,7 +32,7 @@ It signs the on-chain registration with that key, then maps your upstream on the
 
 ```bash
 export BUYER_SIGNER_KEY=0x…
-npx agentgate-0g buy 2 --max 5
+npx agentgate-0g buy 1 --max 5
 ```
 
 `--max` is a budget cap: any invoice priced above it is refused (`PRICE_EXCEEDED`) before a single wei moves. Unknown or paused services fail fast before any payment.
@@ -51,6 +51,24 @@ Tools: `agentgate_list_services`, `agentgate_get_service`, `agentgate_get_invoic
 { "mcpServers": { "agentgate": { "command": "npx", "args": ["-y", "agentgate-0g", "mcp"] } } }
 ```
 
+## Use it as a library
+
+The same functions the CLI runs are exported, so an agent can skip the subprocess. Reads need no key:
+
+```ts
+import { createChainClient, loadConfig, listServices, formatOg } from 'agentgate-0g';
+
+const chain = createChainClient(loadConfig({ AGENTGATE_MODE: 'live' }, { requireStrongAdminToken: false }));
+
+for (const { service, score, tier } of await listServices({ chain })) {
+  console.log(`#${service.id} ${service.name} — ${formatOg(service.priceWei)} · ${tier} · ${score.successCalls}/${score.totalCalls}`);
+}
+```
+
+`createChainClient` builds the `ChainClient` that every function takes as `chain`. The public types (`ChainClient`, `ServiceRecord`, `ServiceScore`, `AttestationRecord`, `AnySigner`, `TrustTier`, `Wei`, `AgentGateConfig`) are exported too, along with `AgentGateError` / `isAgentGateError` for handling failures by `code` rather than by matching message text.
+
+Writes take the same shape, with a signer: `wrapService`, `mapService`, `buyService`, `setServiceActive`.
+
 ## Flags & environment
 
 Every config value can be given as a flag **or** an env var; precedence is **flag > env var > built-in default**.
@@ -61,7 +79,7 @@ Every config value can be given as a flag **or** an env var; precedence is **fla
 | `--rpc-url <url>` | `ZG_RPC_URL` | all (defaults to `https://evmrpc-testnet.0g.ai`) |
 | `--registry <address>` | `REGISTRY_CONTRACT_ADDRESS` | all (defaults to the deployed registry) |
 | `--gateway <url>` | — | wrap, map (default to the hosted gateway in live) · buy (defaults to the service's on-chain endpoint) |
-| `--key <0xhex>` | `SELLER_SIGNER_KEY` (wrap/pause/resume) · `BUYER_SIGNER_KEY` (buy/mcp) | live writes — your wallet key |
+| `--key <0xhex>` | `SELLER_SIGNER_KEY` (wrap/map/pause/resume) · `BUYER_SIGNER_KEY` (buy/mcp) | live writes — your wallet key |
 | `--max <og>` | — | buy: refuse invoices priced above this many OG |
 | `--admin-token <token>` | `AGENTGATE_ADMIN_TOKEN` | mock / self-hosted-admin mapping only |
 

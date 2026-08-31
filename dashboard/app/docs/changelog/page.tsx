@@ -16,6 +16,38 @@ export default function Page() {
         lede="Notable changes to AgentGate — the CLI, gateway, smart contracts and docs — newest first."
       />
 
+      <H2 id="2026-08-31-v103">2026-08-31 — v1.0.3: the library half of the package actually works</H2>
+      <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-6 text-mut">
+        <li>
+          <strong className="text-white">
+            <M>createChainClient</M> is exported.
+          </strong>{' '}
+          Every exported function takes an injected <M>chain: ChainClient</M>, and until now the
+          factory that builds one was bundled but never exported — so the whole library surface
+          imported cleanly and then could not be called. The public types go with it
+          (<M>ChainClient</M>, <M>ServiceRecord</M>, <M>ServiceScore</M>, <M>AttestationRecord</M>,{' '}
+          <M>AnySigner</M>, <M>TrustTier</M>, <M>Wei</M>, <M>AgentGateConfig</M>), along with{' '}
+          <M>loadConfig</M>, the OG/wei helpers, and <M>AgentGateError</M> / <M>isAgentGateError</M>{' '}
+          so failures can be handled by code instead of by matching message text.
+        </li>
+        <li>
+          <strong className="text-white">
+            <M>wrapService</M> no longer demands an admin token it never sends.
+          </strong>{' '}
+          Live mode maps by signing an ownership challenge, so no token is involved — but one was
+          required unconditionally, rejecting the documented default path. It is still required on
+          the admin path, and still <em>before</em> the on-chain write: <M>registerService</M> costs
+          gas and cannot be undone, so a missing token must not be discovered after the service
+          already exists.
+        </li>
+        <li>
+          <strong className="text-white">Help and README corrections.</strong> Invoked as{' '}
+          <M>agentgate-0g</M> the usage line said <M>agentgate</M>; the package README&rsquo;s only{' '}
+          <M>buy</M> example targeted a service id that does not exist; and the <M>--key</M> row
+          omitted <M>map</M>, the command where getting a key in without retyping it matters most.
+        </li>
+      </ul>
+
       <H2 id="2026-08-31-v102">2026-08-31 — v1.0.2: the CLI can say what version it is</H2>
       <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-6 text-mut">
         <li>

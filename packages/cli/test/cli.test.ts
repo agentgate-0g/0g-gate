@@ -145,6 +145,22 @@ function baseWrapOpts(chain: FakeChain, fetchImpl: (url: string, init?: RequestI
 // wrapService — happy path
 // ---------------------------------------------------------------------------
 
+describe('wrapService admin token scope', () => {
+  // Live mode uses a key signer and maps by signing an ownership challenge, so
+  // no admin token is ever sent. Requiring one anyway rejected the documented
+  // default path. The token is still demanded — and still demanded BEFORE the
+  // on-chain write — on the admin path, because registerService costs gas and
+  // cannot be undone.
+  it('does not require an admin token on the owner-signed (key) path', async () => {
+    const chain = makeFakeChain();
+    const { impl } = makeFakeFetch(() => new Response(null, { status: 204 }));
+    const { adminToken: _omitted, ...noToken } = baseWrapOpts(chain, impl);
+    await expect(
+      wrapService({ ...noToken, signer: { kind: 'key', privateKey: `0x${'1'.repeat(64)}` } }),
+    ).resolves.toMatchObject({ serviceId: expect.any(Number) });
+  });
+});
+
 describe('wrapService', () => {
   it('registers on-chain first, then maps the upstream via the admin API', async () => {
     const order: string[] = [];

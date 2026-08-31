@@ -43,7 +43,9 @@ export interface WrapServiceOpts {
   chain: ChainClient;
   signer: AnySigner;
   /** Bearer token for `POST <gateway>/admin/services`. */
-  adminToken: string;
+  /** Bearer token for the mock/admin mapping path. Unused by the owner-signed
+   *  path, which is what live mode uses — so it is required only there. */
+  adminToken?: string;
   /** Runtime mode; in 'live' a non-localhost gateway must use https:// (token safety). */
   mode?: AgentGateMode;
   /** 0G network name (live self-map signature). Defaults to '' (mock ignores it). */
@@ -112,7 +114,15 @@ export async function wrapService(opts: WrapServiceOpts): Promise<WrapServiceRes
     opts.dashboardBaseUrl ?? DEFAULT_DASHBOARD_BASE_URL,
     'dashboardBaseUrl',
   );
-  const adminToken = requireNonEmpty(opts.adminToken, 'adminToken');
+
+  // The admin path needs a token and needs it BEFORE the on-chain write:
+  // registerService costs gas and cannot be undone, so discovering a missing
+  // token afterwards leaves a registered service with no mapping — the exact
+  // half-failure `map` exists to recover from. The owner-signed path (a key
+  // signer, which is what live mode uses) never sends one, so requiring it
+  // there rejected correct calls.
+  const usesAdminToken = opts.signer.kind !== 'key';
+  const adminToken = usesAdminToken ? requireNonEmpty(opts.adminToken, 'adminToken') : '';
 
   const priceWei: Wei = ogToWei(opts.priceOg);
   if (parseWei(priceWei) <= 0n) {
@@ -176,6 +186,7 @@ export async function wrapService(opts: WrapServiceOpts): Promise<WrapServiceRes
         signal: AbortSignal.timeout(timeoutMs),
       };
     } else {
+      const adminToken = requireNonEmpty(opts.adminToken, 'adminToken');
       init = {
         method: 'POST',
         headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },

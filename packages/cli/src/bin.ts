@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { basename } from 'node:path';
 import { Command } from 'commander';
 // Read from the manifest rather than a second constant: a hand-maintained
 // version silently drifts from the one that was actually published, and the
@@ -79,7 +80,10 @@ function explorerTxUrl(config: AgentGateConfig, txHash: string): string | undefi
 const program = new Command();
 
 program
-  .name('agentgate')
+  // Two bin names ship (agentgate, agentgate-0g). Hard-coding either one makes
+  // the usage line wrong for the other; basename(argv[1]) is whichever the
+  // user actually typed.
+  .name(process.argv[1] ? basename(process.argv[1], '.js') : 'agentgate')
   .version(CLI_VERSION, '-v, --version', 'print the installed version')
   .description('AgentGate — wrap any API into a 402-paywalled, on-chain-registered service');
 

@@ -110,3 +110,40 @@ describe('version reporting', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('the library surface is usable, not merely present', () => {
+  // 1.0.2 exported nine functions that every consumer could import and none
+  // could call: each takes an injected `chain: ChainClient`, and the factory
+  // that builds one was bundled but never exported. Checking that the symbols
+  // resolve — which is what was checked — cannot catch that. These assert the
+  // shape a caller actually needs.
+  it('exports the factory that builds the argument every function requires', async () => {
+    const sdk = await import('../src/index');
+    expect(typeof sdk.createChainClient).toBe('function');
+    expect(typeof sdk.loadConfig).toBe('function');
+  });
+
+  it('a consumer can build a client and call a read with only public exports', async () => {
+    const { createChainClient, loadConfig, listServices } = await import('../src/index');
+    // Mock mode so this needs no network: the point is that the wiring exists.
+    const chain = createChainClient(loadConfig({ AGENTGATE_MODE: 'mock' }));
+    expect(typeof chain.listServices).toBe('function');
+    expect(typeof listServices).toBe('function');
+  });
+
+  it('exports the error type its functions throw', async () => {
+    const sdk = await import('../src/index');
+    expect(typeof sdk.AgentGateError).toBe('function');
+    expect(typeof sdk.isAgentGateError).toBe('function');
+    expect(sdk.isAgentGateError(new sdk.AgentGateError('X', 'y', 400))).toBe(true);
+  });
+
+  it('re-exports every constant its own JSDoc names', async () => {
+    // The shipped types referenced these by name while the package kept them
+    // private, so the documentation pointed at something unreachable.
+    const sdk = await import('../src/index');
+    expect(typeof sdk.DEFAULT_WRAP_FETCH_TIMEOUT_MS).toBe('number');
+    expect(typeof sdk.DEFAULT_FAUCET_TIMEOUT_MS).toBe('number');
+    expect(typeof sdk.DEFAULT_MAP_FETCH_TIMEOUT_MS).toBe('number');
+  });
+});
