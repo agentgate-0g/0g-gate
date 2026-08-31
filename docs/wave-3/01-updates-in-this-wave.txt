@@ -15,7 +15,7 @@ Try it with no keys and no setup:
   curl -i https://0g-gateway.mdloglabs.org/svc/1   (a real HTTP 402 invoice)
 
 Shipped:
-- CLI, MCP server and SDK published to npm as agentgate-0g (now 1.0.3): https://www.npmjs.com/package/agentgate-0g — reads need no key, no config and no API key, since every read is a public-RPC view call.
+- CLI, MCP server and SDK published to npm as agentgate-0g (now 1.0.3): https://www.npmjs.com/package/agentgate-0g — reads need no key, no config and no API key: every read is a plain public-RPC call — view calls, plus eth_getLogs for history.
 - Gateway live at https://0g-gateway.mdloglabs.org, serving 402 invoices priced from the contract's on-chain accepts[] list.
 - Repo: https://github.com/agentgate-0g/0g-gate — CI green, 460 TypeScript tests and 42 Foundry tests.
 
