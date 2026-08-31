@@ -13,6 +13,8 @@
 
 **[Dashboard](https://agentgate.mdloglabs.org)** · **[Gateway](https://0g-gateway.mdloglabs.org)** · **[npm](https://www.npmjs.com/package/agentgate-0g)** · **[Docs](https://agentgate.mdloglabs.org/docs)** · **[Explorer](https://chainscan-galileo.0g.ai)** · **[Faucet](https://faucet.0g.ai)**
 
+_The hosted dashboard and docs still serve the pre-migration Casper build — the screenshot below is the 0G build in this repo. The gateway, the deployed contracts and the CLI are live on 0G ([Roadmap](#roadmap))._
+
 [![AgentGate dashboard — live catalog of on-chain registered services](docs/assets/dashboard.png)](https://agentgate.mdloglabs.org)
 
 </div>
@@ -43,10 +45,10 @@ AI agents can't pay for the APIs they use — no cards, no logins, no accounts. 
 - **One-command wrap** — any HTTP API becomes a paid, on-chain-registered service; the private upstream never touches the chain.
 - **One-command buy** — discover from the on-chain registry, pay a machine-readable 402 invoice, get the data back.
 - **Invoice-bound payments** — the buyer pays through a `PaymentRouter` contract that binds the invoice nonce to the payment **on-chain** and rejects a replay, so verification is one exact-match log lookup instead of a heuristic transfer search.
-- **On-chain price list** — each service stores an `accepts[]` price list *in the contract*. The shipped rail is **native OG only**; the multi-asset shape is already on-chain, so an ERC-20 rail is a client change, not a contract change.
+- **On-chain price list** — each service stores an `accepts[]` price list *in the contract*, with a per-entry `asset` address and EIP-712 domain fields. The shipped rail is **native OG only** (`PaymentRouter.pay()` settles `msg.value`); the multi-asset shape is already on-chain, so an authorization-settled ERC-20 rail is a client change, not a contract change.
 - **Native MCP tools** — one line of config and any MCP-capable agent (Claude Desktop, custom clients) gets discover / inspect / pay as native tools.
-- **Payment-backed reputation** — each served call is attested on-chain, so trust scores are receipts of real value transfer, not marketing.
-- **Zero-config reads, no API key at all** — `list` and `status` are public-RPC view calls. There is no indexer and no key to provision, anywhere in the read path.
+- **Payment-backed reputation** — every arms-length served call is attested on-chain, so trust scores are receipts of real value transfer, not marketing. A call paid by the service's own owner or payout account is served but never scored, so nobody can wash-trade their own reputation.
+- **Zero-config reads, no API key at all** — `list` and `status` are plain public-RPC reads: view calls, plus one bounded `eth_getLogs` for attestation history. There is no indexer and no key to provision, anywhere in the read path.
 
 ---
 
@@ -172,7 +174,7 @@ It does **not** implement x402's `exact` settlement scheme, and says so on the w
 
 0G has no x402 facilitator, so settled-proof is the rail that can actually ship there — no third party in the money path, and the gateway custodies nothing. Advertising `scheme:"exact"` would promise an interop we cannot honour: a generic x402 client would sign an authorization and be 402'd forever. The distinct name makes it fail fast instead. The on-chain `accepts[]` price list is the seam where an authorization-based rail could be added later without touching the contracts.
 
-> Full component breakdown: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · engineering contract: [docs/SPEC.md](docs/SPEC.md) · protocol detail: [/docs/protocol](https://agentgate.mdloglabs.org/docs/protocol#x402-relationship).
+> Full component breakdown: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · engineering contract: [docs/SPEC.md](docs/SPEC.md), whose opening note states this same x402 relationship in spec form. The hosted [/docs/protocol](https://agentgate.mdloglabs.org/docs/protocol) page still runs the pre-migration build and does not yet carry this section.
 
 ---
 
@@ -191,7 +193,7 @@ npm run dev:dashboard     # in a second terminal → open the URL it prints
 ```bash
 npm run dev               # empty stack: devnet :4030 + oracle :4010 + middleware :4021
 # paste the printed MOCK_BUYER_ACCOUNT / MOCK_SELLER_ACCOUNT export lines, then:
-npm run agentgate -- wrap http://localhost:4010/feed --price 0.5 --name "RWA FX & Gold Oracle"
+npm run agentgate -- wrap http://localhost:4010/feed --mode mock --price 0.5 --name "RWA FX & Gold Oracle"
 npm run agent -- --task "Get today's USD/IDR rate and gold price, summarize for a treasury report"
 npm run agentgate -- buy 1 --mode mock    # or skip the agent: pay once, print the data
 ```
@@ -224,7 +226,7 @@ Set `ANTHROPIC_API_KEY` to let the buyer agent use Claude instead of the MockLlm
 | Reads | in-memory | contract view calls — no indexer, no API key |
 | Guardrails | default admin token OK, SSRF guard off | default token refused, SSRF guard on |
 
-All env vars are documented in [.env.example](.env.example). In **live mode** the gateway requires `REGISTRY_CONTRACT_ADDRESS`, `PAYMENT_ROUTER_ADDRESS`, `GATE_SIGNER_KEY` and a non-default `AGENTGATE_ADMIN_TOKEN` (enforced by config). The **CLI is looser**: `list` and `status` — attestation history included — read the public RPC with no keys at all. Live `wrap` needs **no** admin token: it maps the upstream by signing an ownership challenge with `SELLER_SIGNER_KEY`, verified against the on-chain `owner`. Live `buy` needs only a funded `BUYER_SIGNER_KEY`. Every value can also be passed as a flag (`--mode`, `--rpc-url`, `--registry`, `--key`, `--admin-token`; flag > env > default).
+All gateway, CLI, oracle and agent env vars are documented in [.env.example](.env.example) — the dashboard has one build-time var of its own, `NEXT_PUBLIC_SITE_URL`. In **live mode** the gateway requires `GATE_SIGNER_KEY` and a non-default `AGENTGATE_ADMIN_TOKEN`, both refused at boot if missing or left at the default. `REGISTRY_CONTRACT_ADDRESS` and `PAYMENT_ROUTER_ADDRESS` are **optional**: left unset they fall back to the [deployed addresses](#deployed-addresses) below, so set them only to point at a different deployment — a malformed value is refused at boot. The **CLI is looser**: `list` and `status` — attestation history included — read the public RPC with no keys at all. Live `wrap` needs **no** admin token: it maps the upstream by signing an ownership challenge with `SELLER_SIGNER_KEY`, verified against the on-chain `owner`. Live `buy` needs only a funded `BUYER_SIGNER_KEY`. Flags override env everywhere (flag > env > default): `--mode`, `--rpc-url` and `--registry` on every command, `--key` on `wrap`, `map`, `buy`, `pause`, `resume` and `mcp`, `--gateway` on `wrap`, `map` and `buy`, and `--admin-token` on `wrap` and `map`.
 
 > **Key hygiene.** Signer keys are raw hex in environment variables. An env var leaks through `docker inspect`, `/proc/<pid>/environ`, platform dashboards and crash dumps in ways a mode-600 file does not — see [docs/DEPLOY-GATEWAY.md](docs/DEPLOY-GATEWAY.md) for the operator hardening steps. The code never logs a key, and a malformed one is reported by variable name, never by value.
 
@@ -241,11 +243,14 @@ packages/
   client/        agent-side fetchPaid (parse 402 → pay via router → retry)
   oracle/        demo RWA feed: USD/IDR + gold spot + confidence          :4010
   buyer-agent/   LLM decision loop (AnthropicLlm / MockLlm)
-  cli/           agentgate wrap | buy | list | status | pause | resume | demo-accounts
+  cli/           agentgate wrap | map | buy | list | status | pause | resume | demo-accounts | mcp
 dashboard/       Next.js 16 landing + catalog + live activity + docs      :3000
 contracts-evm/   AgentGateRegistry · PaymentRouter · SpendGuard (Solidity + Foundry)
 e2e/             full-loop test, in-process servers on port 0
-scripts/         dev.ts (stack) · demo.ts (one-shot scripted demo)
+scripts/         dev.ts (mock stack) · live.ts (live gateway) · demo.ts · mcp.sh · smoke-live-read.ts
+docs/            ARCHITECTURE · SPEC · DEPLOY · DEPLOY-GATEWAY · HOSTING · TESTING (+ archive/)
+deploy/          pm2 ecosystem config + systemd unit for the hosted gateway
+.github/         CI workflow (the badge above) + issue and PR templates
 ```
 
 ---
@@ -260,10 +265,10 @@ scripts/         dev.ts (stack) · demo.ts (one-shot scripted demo)
 | `npm run agentgate -- …` | the `agentgate` CLI |
 | `npm run agent -- --task "…"` | run the buyer agent once |
 | `npm run typecheck` | `tsc --noEmit` in every package + dashboard + root scripts/e2e |
-| `npm test` | vitest: all package units + the e2e loop (423 tests) |
+| `npm test` | vitest: all package units + the e2e loop (460 tests) |
 | `npm run build` | dashboard `next build` |
 
-Contract tests: `cd contracts-evm && forge test` — 42 tests across `AgentGateRegistry`, `PaymentRouter` and `SpendGuard`.
+Contract tests: `cd contracts-evm && forge test` — 42 tests across `AgentGateRegistry` (21), `SpendGuard` (14) and `PaymentRouter` (7). `contracts-evm/lib/` is gitignored and there are no submodules, so a fresh clone vendors forge-std once first: `forge install foundry-rs/forge-std@v1.16.2 --no-git --shallow`. CI does the same, pinned to the same tag.
 
 > `packages/chain`'s live-client suites spawn a real `anvil` and deploy the contracts to it, so [Foundry](https://getfoundry.sh) is required for a full `npm test` run — without it those suites fail rather than skip. CI installs it.
 
@@ -291,6 +296,8 @@ None of the three is upgradable — there is no proxy, so a redeploy is a **new 
 
 > `gateway.mdloglabs.org` (no `0g-` prefix) is the **older Casper deployment**, kept running separately. It is a different chain with a different registry, so pointing `--gateway` at it registers a service on 0G that the gateway cannot map — the on-chain registration is real and is not rolled back, while `/svc/<id>` 404s.
 
+> The **hosted dashboard is still the pre-migration Casper build** — `agentgate.mdloglabs.org/api/services` reports `network: casper-test` and prices in CSPR. Only the gateway has been cut over to 0G. The dashboard *in this repo* is the 0G one; re-pointing the hosted deployment at it is the first item under [Roadmap → Next](#roadmap).
+
 <details>
 <summary><b>Deploy runbook and self-hosting</b></summary>
 
@@ -313,12 +320,13 @@ None of the three is upgradable — there is no proxy, so a redeploy is a **new 
 - On-chain `accepts[]` price list — multi-asset shape stored in the contract
 - Indexer-free chain client — viem view calls + `eth_getLogs`, no API key in the read path
 - MCP server for any agent framework — `npx agentgate-0g mcp`
+- Importable SDK — the same package is a library: `import { wrapService, buyService, listServices } from 'agentgate-0g'`
 - CLI **v1.0.3**
 
 **Next**
 
 - Re-point the hosted dashboard at 0G — the contracts are deployed and the hosted gateway already serves them, but https://agentgate.mdloglabs.org still runs the pre-migration build
-- ERC-20 rail over the existing on-chain `accepts[]` (a client change, not a contract change)
+- ERC-20 rail over the existing on-chain `accepts[]` — authorization-settled, so a client change, not a contract change
 - Wire `SpendGuard` into the request path as an on-chain spend firewall
 - Staking-weighted attestations with slashing
 
