@@ -5,7 +5,7 @@ import { Live0gClient } from './live-0g';
 export { MockChainHttpClient, mockAccountAddress } from './mock';
 export { Live0gClient } from './live-0g';
 export { recoverSigner, type OwnerSignatureResult } from './signature';
-export { normalizeAddress, isAddress, sameAddress, shortAddress } from './address';
+export { normalizeAddress, isAddress, sameAddress, shortAddress, addressFromPrivateKey } from './address';
 export { REGISTRY_ABI, PAYMENT_ROUTER_ABI, SPEND_GUARD_ABI } from './abi';
 
 /**

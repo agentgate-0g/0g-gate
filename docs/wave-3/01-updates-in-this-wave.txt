@@ -1,4 +1,4 @@
-This Wave AgentGate moved off Casper and onto 0G Galileo Testnet, and the whole loop is now live and checkable on-chain.
+This Wave AgentGate went live on 0G Galileo Testnet: contracts deployed, CLI and SDK published, and the full pay-per-call loop proven on-chain with real OG.
 
 Deployed to Galileo (chain 16602, native OG):
 - AgentGateRegistry 0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA
@@ -20,9 +20,9 @@ Shipped:
 - Repo: https://github.com/agentgate-0g/0g-gate — CI green, 449 TypeScript tests and 42 Foundry tests.
 
 Engineering notes worth reporting honestly:
-- Payment binding had to be redesigned. Casper transfers could carry the invoice nonce inside them; an EVM transfer carries nothing. PaymentRouter.pay(serviceId, nonce, payTo) forwards msg.value without ever custodying funds and emits an indexed Paid event, so verification is one receipt lookup matched on both service and nonce.
+- Binding a payment to an invoice. A native transfer carries no reference to what it pays for, so a tx hash alone cannot prove which invoice was settled — one payment could be replayed across many calls. PaymentRouter.pay(serviceId, nonce, payTo) forwards msg.value without ever custodying funds and emits an indexed Paid event, so verification is one receipt lookup matched on both service and nonce, and the gateway burns the nonce once it serves.
 - 0G rejects Foundry's auto-estimated priority fee: a ~7 wei base fee derives a 1 wei tip against an enforced 2 gwei minimum. The deploy needs explicit fees. viem is unaffected.
 - We do not claim x402 compliance we don't have. The envelope is x402 V1, but the scheme is named exact-settled, not exact: 0G has no x402 facilitator, so the buyer settles first and presents the tx hash instead of signing an authorization for a third party.
-- Publishing found two defects that a green test suite could not: the package shipped an entry point into unbuilt source, and the SDK exported functions that no consumer could call because the factory building their required argument was never exported. Both were caught by installing the tarball into an empty directory, and both now have tests.
+- Publishing found two defects a green test suite could not: the package shipped an entry point into source it did not ship, and the SDK exported functions no consumer could call, because the factory building their required argument was never exported. Both surfaced only by installing the tarball into an empty directory. Both now have tests.
 
-Not done yet, stated plainly: the hosted dashboard still serves the pre-migration build. The gateway and CLI are on 0G; that one surface is not.
+Not done yet, stated plainly: the hosted dashboard at agentgate.mdloglabs.org still runs an older build and does not yet read the deployed registry. The contracts, gateway, CLI and SDK are live on 0G; that one surface is not.

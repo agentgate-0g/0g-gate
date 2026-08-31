@@ -19,6 +19,7 @@ import {
   type TestUpstream,
 } from './helpers';
 import { FakeChainClient } from './fake-chain';
+import { addressFromPrivateKey } from '@agentgate/chain';
 
 describe('paywall flow (mock mode)', () => {
   let gw: TestGateway;
@@ -43,10 +44,37 @@ describe('paywall flow (mock mode)', () => {
     await upstream.close();
   });
 
-  it('GET /healthz reports ok + network', async () => {
+  it('advertises the address derived from GATE_SIGNER_KEY, not some other value', async () => {
+    // The seller half of the fix is only as good as this: `wrap` registers
+    // whatever address this endpoint reports, and the registry then reverts
+    // recordAttestation for anyone else. If the advertised address and the
+    // signing key ever diverge, every service registered through the fix is
+    // unattestable in exactly the way the fix exists to prevent — silently,
+    // because payments keep working.
+    const key = `0x${'ab'.repeat(32)}`;
+    const liveGw = await bootGateway({
+      config: testConfig({ mode: 'live', adminToken: 'live-admin-secret', gateSignerKey: key }),
+    });
+    try {
+      const body = (await (await fetch(`${liveGw.baseUrl}/healthz`)).json()) as {
+        attestor?: string;
+      };
+      expect(body.attestor).toBe(addressFromPrivateKey(key));
+      expect(body.attestor).toMatch(/^0x[0-9a-f]{40}$/);
+    } finally {
+      await liveGw.close();
+    }
+  });
+
+  it('GET /healthz reports ok + network + the attestor it signs as', async () => {
+    // `attestor` is part of the contract, not decoration: `wrap` reads it to
+    // register services with an attestor this gateway is authorised to be.
+    // Without it a seller's service takes payments and never scores, because
+    // recordAttestation reverts for anyone but the attestor or the owner.
+    // Empty here because mock mode has no GATE_SIGNER_KEY.
     const res = await fetch(`${gw.baseUrl}/healthz`);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, network: 'mock' });
+    expect(await res.json()).toEqual({ ok: true, network: 'mock', attestor: '' });
   });
 
   it('unpaid request gets a 402 challenge with a valid x402 PaymentRequiredResponse', async () => {

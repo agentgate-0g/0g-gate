@@ -7,9 +7,9 @@ paste. There is nothing to strip afterwards.
 
 | Form field | File | Length |
 |---|---|---|
-| Updates in this Wave | [`wave-3/01-updates-in-this-wave.txt`](./wave-3/01-updates-in-this-wave.txt) | 2,627 of 3,000 |
-| Milestone → 4th Wave | [`wave-3/02-milestone-4th-wave.txt`](./wave-3/02-milestone-4th-wave.txt) | 1,371 |
-| Milestone → 5th Wave | [`wave-3/03-milestone-5th-wave.txt`](./wave-3/03-milestone-5th-wave.txt) | 1,495 |
+| Updates in this Wave | [`wave-3/01-updates-in-this-wave.txt`](./wave-3/01-updates-in-this-wave.txt) | 2,860 of 3,000 |
+| Milestone → 4th Wave | [`wave-3/02-milestone-4th-wave.txt`](./wave-3/02-milestone-4th-wave.txt) | 894 of 900 |
+| Milestone → 5th Wave | [`wave-3/03-milestone-5th-wave.txt`](./wave-3/03-milestone-5th-wave.txt) | 886 of 900 |
 
 Copy one to the clipboard without opening an editor:
 
@@ -62,9 +62,15 @@ Re-measure a field's length after editing it:
 wc -m docs/wave-3/01-updates-in-this-wave.txt   # must stay under 3,000
 ```
 
-`wc -m` reports 2,628 for that file — one more than the 2,627 above, because it
-counts the trailing newline that the pasted text does not need. Both are far
-under the cap; the difference only matters if you are cutting it fine.
+`wc -m` counts the trailing newline, so it reports one more than the figures
+above, which are the pasted text alone. That one character matters here: the
+milestone fields sit 6 and 14 under their 900 cap, so re-measure with
+
+```bash
+python3 -c "print(len(open('docs/wave-3/02-milestone-4th-wave.txt').read().rstrip()))"
+```
+
+after any edit, rather than trusting `wc`.
 
 ---
 

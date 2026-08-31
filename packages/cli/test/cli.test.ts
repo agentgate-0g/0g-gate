@@ -145,6 +145,108 @@ function baseWrapOpts(chain: FakeChain, fetchImpl: (url: string, init?: RequestI
 // wrapService — happy path
 // ---------------------------------------------------------------------------
 
+describe('wrapService attestor defaulting', () => {
+  // A seller wrapping against a gateway they do not run used to register their
+  // OWN address as attestor. The registry reverts recordAttestation for anyone
+  // who is neither attestor nor owner, so the gateway serving the calls could
+  // never write one: payments landed, the score stayed 0/0, and nothing said so.
+  // Found by wrapping a real API against the hosted gateway and watching the
+  // score refuse to move.
+  const GATEWAY_ATTESTOR = '0x71a89a7e692dac4d6bd7c3f1cca9155592d87bae';
+
+  function healthyGateway(attestor?: string) {
+    return makeFakeFetch((url: string) =>
+      url.endsWith('/healthz')
+        ? new Response(JSON.stringify({ ok: true, network: '0g-galileo', ...(attestor ? { attestor } : {}) }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        : new Response(null, { status: 204 }),
+    );
+  }
+
+  it("registers the GATEWAY's attestor, not the seller's, when the gateway says who it is", async () => {
+    const chain = makeFakeChain();
+    const { impl } = healthyGateway(GATEWAY_ATTESTOR);
+    await wrapService(baseWrapOpts(chain, impl));
+    expect(chain.registered[0]!.input.attestor).toBe(GATEWAY_ATTESTOR);
+  });
+
+  it('lets an explicit --attestor win, for a seller running their own gateway', async () => {
+    const chain = makeFakeChain();
+    const { impl } = healthyGateway(GATEWAY_ATTESTOR);
+    const mine = `0x${'ab'.repeat(20)}`;
+    await wrapService({ ...baseWrapOpts(chain, impl), attestor: mine });
+    expect(chain.registered[0]!.input.attestor).toBe(mine);
+  });
+
+  it('falls back to the seller and does not throw when the gateway says nothing', async () => {
+    const chain = makeFakeChain();
+    const { impl } = healthyGateway(undefined);
+    const res = await wrapService(baseWrapOpts(chain, impl));
+    expect(res.serviceId).toEqual(expect.any(Number));
+    expect(chain.registered[0]!.input.attestor).toMatch(/^0x[0-9a-f]{40}$/);
+  });
+
+  it('warns, naming the gateway address, when --attestor cannot attest', async () => {
+    // The warning IS the safety net for this branch: registration is an
+    // irreversible on-chain write, so a seller who passes the wrong address
+    // needs to be told while they can still act. Untested, it can be deleted
+    // without anything going red.
+    const chain = makeFakeChain();
+    const { impl } = healthyGateway(GATEWAY_ATTESTOR);
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await wrapService({ ...baseWrapOpts(chain, impl), attestor: `0x${'ab'.repeat(20)}` });
+      const said = spy.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(said).toContain(GATEWAY_ATTESTOR); // tells them the address to use
+      expect(said).toMatch(/0\/0|attestation/i); // and what goes wrong if they don't
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('warns in live mode when the gateway advertises no attestor at all', async () => {
+    const chain = makeFakeChain();
+    const { impl } = healthyGateway(undefined);
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await wrapService({
+        ...baseWrapOpts(chain, impl),
+        mode: 'live',
+        gateway: 'https://gw.example', // live mode refuses http:// for non-localhost
+      });
+      expect(spy.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(/did not advertise/i);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('probes the advertised gateway with a plain GET on /healthz', async () => {
+    // Pins the request shape: a seller's gateway has to be able to answer it.
+    const chain = makeFakeChain();
+    const { impl, calls } = healthyGateway(GATEWAY_ATTESTOR);
+    await wrapService(baseWrapOpts(chain, impl));
+    const probe = calls.find((c) => c.url.endsWith('/healthz'));
+    expect(probe).toBeDefined();
+    expect(probe!.url).toBe('http://gw.example:4021/healthz');
+    expect(probe!.init?.method ?? 'GET').toBe('GET');
+  });
+
+  it('still registers when the health probe fails outright', async () => {
+    // The probe runs before an on-chain write that costs gas; an unreachable
+    // health endpoint must not block registration.
+    const chain = makeFakeChain();
+    const { impl } = makeFakeFetch((url: string) => {
+      if (url.endsWith('/healthz')) throw new Error('ECONNREFUSED');
+      return new Response(null, { status: 204 });
+    });
+    await expect(wrapService(baseWrapOpts(chain, impl))).resolves.toMatchObject({
+      serviceId: expect.any(Number),
+    });
+  });
+});
+
 describe('wrapService admin token scope', () => {
   // Live mode uses a key signer and maps by signing an ownership challenge, so
   // no admin token is ever sent. Requiring one anyway rejected the documented
@@ -162,11 +264,15 @@ describe('wrapService admin token scope', () => {
 });
 
 describe('wrapService', () => {
-  it('registers on-chain first, then maps the upstream via the admin API', async () => {
+  it('probes the gateway, then registers on-chain, then maps the upstream', async () => {
+    // The probe has to come FIRST: it asks the gateway which address it signs
+    // attestations as, and that address is written into the registration, which
+    // cannot be changed by re-registering. Mapping has to come LAST: it is the
+    // only step that is safe to repeat.
     const order: string[] = [];
     const chain = makeFakeChain({ onRegister: () => order.push('register') });
-    const { impl, calls } = makeFakeFetch(() => {
-      order.push('admin');
+    const { impl, calls } = makeFakeFetch((url: string) => {
+      order.push(url.endsWith('/healthz') ? 'probe' : 'admin');
       return new Response(null, { status: 204 });
     });
 
@@ -180,8 +286,13 @@ describe('wrapService', () => {
     expect(result.adminOk).toBe(true);
     expect(result.adminWarning).toBeUndefined();
 
-    // ordering: on-chain registration happens before the admin POST
-    expect(order).toEqual(['register', 'admin']);
+    // ordering: probe, then the on-chain write, then the repeatable mapping
+    expect(order).toEqual(['probe', 'register', 'admin']);
+
+    // Exactly one mapping call. The probe is the other request and is asserted
+    // by `order` above; filtering it here keeps the mapping assertions exact.
+    const mapCalls = calls.filter((c) => !c.url.endsWith('/healthz'));
+    expect(mapCalls).toHaveLength(1);
 
     // on-chain input: endpointUrl is the gateway BASE (SPEC §9 final decision)
     expect(chain.registered).toHaveLength(1);
@@ -201,8 +312,7 @@ describe('wrapService', () => {
     expect(reg.signer).toEqual(SIGNER);
 
     // admin POST: URL, auth header, JSON body
-    expect(calls).toHaveLength(1);
-    const call = calls[0]!;
+    const call = mapCalls[0]!;
     expect(call.url).toBe('http://gw.example:4021/admin/services');
     expect(call.init?.method).toBe('POST');
     expect(headersOf(call)['authorization']).toBe('Bearer tok-123');

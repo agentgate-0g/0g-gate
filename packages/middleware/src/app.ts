@@ -30,7 +30,7 @@ import {
   type PaymentRequirements,
   type ServiceRecord,
 } from '@agentgate/shared';
-import { isAddress, recoverSigner, sameAddress } from '@agentgate/chain';
+import { addressFromPrivateKey, isAddress, recoverSigner, sameAddress } from '@agentgate/chain';
 import { MemoryInvoiceStore, type InvoiceStore } from './invoice-store';
 import { FileInvoiceStore } from './invoice-store-file';
 import { MemoryAttestationQueue, type AttestationQueue } from './attestation-queue';
@@ -160,6 +160,11 @@ export function createApp(deps: MiddlewareDeps): Express {
       500,
     );
   }
+  // Derived once: the address this gateway signs attestations as. Empty in
+  // mock mode, where a mock signer stands in for a key.
+  const gatewayAttestor =
+    config.gateSignerKey.trim() === '' ? '' : addressFromPrivateKey(config.gateSignerKey);
+
   // Fail closed: an unset/malformed router means every 402 this gateway ever
   // issues carries `extra.router: ''` — the gateway boots and looks healthy,
   // but no buyer can ever pay (the client rejects a non-0x router as
@@ -415,7 +420,13 @@ export function createApp(deps: MiddlewareDeps): Express {
 
   // Liveness: the process is up. Cheap and dependency-free (for Docker/Railway).
   app.get('/healthz', (_req, res) => {
-    res.json({ ok: true, network: chain.network });
+    // `attestor` is advertised so a seller can register with an attestor this
+    // gateway is actually authorised to be. The registry reverts
+    // recordAttestation for anyone who is neither the service's attestor nor
+    // its owner, so a service registered against the wrong address takes
+    // payments and never scores — and nothing tells the seller. Publishing the
+    // address is safe: it is in every attestation this gateway writes on-chain.
+    res.json({ ok: true, network: chain.network, attestor: gatewayAttestor });
   });
 
   // Readiness: the backing chain is reachable (bounded). Returns 503 when not,

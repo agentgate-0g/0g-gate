@@ -18,6 +18,7 @@ import {
   requireNonEmpty,
   requireSafeText,
 } from './validate';
+import { isAddress, normalizeAddress, sameAddress } from '@agentgate/chain';
 
 /** Where the dashboard detail link points when not overridden. */
 export const DEFAULT_DASHBOARD_BASE_URL = 'http://localhost:3000';
@@ -137,10 +138,47 @@ export async function wrapService(opts: WrapServiceOpts): Promise<WrapServiceRes
     opts.paymentTarget !== undefined
       ? requireAddress(opts.paymentTarget, 'paymentTarget')
       : await signerAddress(opts.signer);
-  const attestor =
-    opts.attestor !== undefined
-      ? requireAddress(opts.attestor, 'attestor')
-      : await signerAddress(opts.signer);
+  // Who may write this service's attestations. The registry reverts
+  // recordAttestation for anyone who is neither the attestor nor the owner, and
+  // the party that observes a served call is the GATEWAY, not the seller. So
+  // defaulting this to the seller's own address — as it used to — produced a
+  // service that took payments and could never score, with nothing to say so.
+  //
+  // Ask the gateway who it signs as and register that. An explicit --attestor
+  // still wins (a seller running their own gateway, or delegating), but a value
+  // the gateway cannot use is worth warning about before the write, because
+  // registration costs gas and cannot be undone.
+  // Validate before the probe: a malformed --attestor must fail without a
+  // network call, the same as every other bad input here.
+  const explicitAttestor =
+    opts.attestor !== undefined ? requireAddress(opts.attestor, 'attestor') : undefined;
+  const gatewayAttestor = await fetchGatewayAttestor(
+    gatewayBase,
+    opts.fetchImpl ?? ((u, i) => fetch(u, i)),
+  );
+  let attestor: string;
+  if (explicitAttestor !== undefined) {
+    attestor = explicitAttestor;
+    if (gatewayAttestor !== '' && !sameAddress(attestor, gatewayAttestor)) {
+      console.error(
+        `warning: --attestor ${attestor} is not this gateway's attestor ` +
+          `(${gatewayAttestor}). The gateway serves the calls but will NOT be able to ` +
+          `record attestations, so the score stays 0/0. Use --attestor ` +
+          `${gatewayAttestor} unless you intend to attest yourself.`,
+      );
+    }
+  } else if (gatewayAttestor !== '') {
+    attestor = gatewayAttestor;
+  } else {
+    attestor = await signerAddress(opts.signer);
+    if (opts.mode === 'live') {
+      console.error(
+        `warning: the gateway did not advertise an attestor, so the service is being ` +
+          `registered with yours (${attestor}). If that gateway serves the calls it ` +
+          `cannot record attestations, and the score will stay 0/0.`,
+      );
+    }
+  }
 
   // -- step 1: on-chain registration -----------------------------------------
   const input: RegisterServiceInput = {
@@ -221,4 +259,34 @@ export async function wrapService(opts: WrapServiceOpts): Promise<WrapServiceRes
   ].join('\n');
   console.error(`warning: ${adminWarning}`);
   return { serviceId, txHash, publicUrl, dashboardUrl, adminOk: false, adminWarning };
+}
+
+/**
+ * Ask a gateway which address it signs attestations as.
+ *
+ * Returns '' when the gateway does not say — an older gateway, an unreachable
+ * one, or mock mode. Deliberately non-fatal: this runs before an on-chain
+ * registration that costs gas, and a health probe failing is not a reason to
+ * refuse to register. The caller warns instead.
+ */
+export async function fetchGatewayAttestor(
+  gatewayBase: string,
+  fetchImpl: FetchLike,
+  timeoutMs = 5_000,
+): Promise<string> {
+  try {
+    const res = await fetchImpl(`${gatewayBase}/healthz`, {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) return '';
+    const body = (await res.json()) as { attestor?: unknown };
+    // Normalised: isAddress() accepts surrounding whitespace and any casing,
+    // but this value is compared against on-chain records and written into a
+    // registration, both of which use the canonical lowercase form.
+    return typeof body.attestor === 'string' && isAddress(body.attestor)
+      ? normalizeAddress(body.attestor)
+      : '';
+  } catch {
+    return '';
+  }
 }
