@@ -6,7 +6,7 @@ import { DEFAULT_REGISTRY_ADDRESS, DEFAULT_ZG_EXPLORER_URL, DEFAULT_ZG_NETWORK }
  * `cli`/`sdk` when those packages publish a new version.
  */
 export const DOCS_VERSION = {
-  cli: '1.0.0', // agentgate-0g
+  cli: '1.0.1', // agentgate-0g
   sdk: '0.1.0', // @agentgate/client
   network: DEFAULT_ZG_NETWORK,
   chainId: 16602,

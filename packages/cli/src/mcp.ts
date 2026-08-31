@@ -37,7 +37,7 @@ export interface McpServerDeps {
 }
 
 const MCP_NAME = 'agentgate';
-const MCP_VERSION = '1.0.0';
+const MCP_VERSION = '1.0.1';
 
 interface ToolTextResult {
   [x: string]: unknown;

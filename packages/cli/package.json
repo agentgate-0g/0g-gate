@@ -1,6 +1,6 @@
 {
   "name": "agentgate-0g",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Wrap any HTTP API into a paid HTTP 402 service on 0G \u2014 micropayments in native OG with on-chain discovery and reputation, over the x402 V1 envelope.",
   "type": "module",
   "bin": {

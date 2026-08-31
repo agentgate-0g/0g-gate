@@ -16,6 +16,18 @@ export default function Page() {
         lede="Notable changes to AgentGate — the CLI, gateway, smart contracts and docs — newest first."
       />
 
+      <H2 id="2026-08-31-v101">2026-08-31 — v1.0.1: package metadata points at this repo</H2>
+      <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-6 text-mut">
+        <li>
+          <strong className="text-white">Repository, homepage and issues.</strong> v1.0.0 shipped
+          with <M>repository</M>, <M>homepage</M> and <M>bugs</M> still naming the Casper-era
+          GitHub repo, so the npm page linked to a repository that does not contain this code and
+          sent bug reports to the wrong tracker. They now name{' '}
+          <M>github.com/agentgate-0g/0g-gate</M>. Those fields travel inside the tarball, so a
+          release is the only thing that can correct them — nothing else in the package changed.
+        </li>
+      </ul>
+
       <H2 id="2026-08-31-v100">2026-08-31 — v1.0.0: AgentGate on 0G Galileo Testnet</H2>
       <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-6 text-mut">
         <li>
