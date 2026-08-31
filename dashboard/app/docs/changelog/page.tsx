@@ -16,6 +16,37 @@ export default function Page() {
         lede="Notable changes to AgentGate — the CLI, gateway, smart contracts and docs — newest first."
       />
 
+      <H2 id="2026-08-31-v102">2026-08-31 — v1.0.2: the CLI can say what version it is</H2>
+      <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-6 text-mut">
+        <li>
+          <strong className="text-white">
+            <M>--version</M> / <M>-v</M>
+          </strong>{' '}
+          now exist. The bug-report template had been telling people to run them on a CLI that
+          registered no such flag. The value is read from the manifest, so it cannot drift from the
+          version that was actually published, and the MCP server&rsquo;s readiness banner now names
+          it too — which is what the docs had already claimed it did.
+        </li>
+        <li>
+          <strong className="text-white">
+            <M>wrap --help</M> stopped contradicting the README.
+          </strong>{' '}
+          It advertised a <M>localhost:4021</M> default for <M>--gateway</M>. The published CLI
+          defaults to live mode and resolves the hosted gateway; the localhost default only ever
+          applied in mock mode. <M>map</M>&rsquo;s identical flag was corrected during the migration
+          and <M>wrap</M> was missed.
+        </li>
+        <li>
+          <strong className="text-white">
+            <M>map</M> is documented on npm.
+          </strong>{' '}
+          The package README listed every command except the one that recovers a half-failed{' '}
+          <M>wrap</M> — where the on-chain registration lands but the gateway mapping does not.
+          Re-running <M>wrap</M> there registers a second service and spends gas again, and the
+          first registration cannot be undone.
+        </li>
+      </ul>
+
       <H2 id="2026-08-31-v101">2026-08-31 — v1.0.1: package metadata points at this repo</H2>
       <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-6 text-mut">
         <li>
