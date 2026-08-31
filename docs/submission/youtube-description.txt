@@ -1,0 +1,53 @@
+An AI agent discovers an API, pays for a single call on-chain, and gets the data back — no cards, no accounts, no API keys. This is AgentGate, live on 0G Galileo Testnet.
+
+Everything on screen is real. The terminal output was captured from live commands, and the dashboard reads the deployed registry contract. Nothing is mocked up.
+
+Verify it yourself — no key, no config, no clone:
+  npx agentgate-0g@latest list
+  curl -i https://0g-gateway.mdloglabs.org/svc/1
+
+CHAPTERS
+0:00 What it is
+0:18 Zero setup — the live on-chain catalog
+0:40 A real HTTP 402 invoice
+1:05 The full loop: register, pay, serve, attest, score
+1:40 Receipts, not ratings
+2:10 Any MCP agent can use it
+2:32 Live today
+
+HOW IT WORKS
+A seller wraps any HTTP API in one command. The service is registered on 0G with its payout address and an accepts[] price list stored in the contract, while the private upstream is mapped by an owner-signed EIP-191 challenge — its URL never touches the chain.
+
+A buyer agent reads the 402 invoice, pays PaymentRouter.pay(serviceId, nonce, payTo), and retries with the transaction hash. The router binds that payment to the invoice nonce on-chain and rejects a replay, so the gateway verifies with one exact log lookup on the receipt: no scanning, no indexer, no facilitator, and the gateway never custodies funds.
+
+Each served call is attested on-chain with its payment hash, so a trust score counts payments that actually settled rather than stars anyone can farm. A call paid by the service's own owner is served but deliberately never scored, so reputation cannot be wash-traded.
+
+DEPLOYED ON 0G GALILEO TESTNET (chain 16602, native OG)
+AgentGateRegistry  0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA
+PaymentRouter      0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB
+SpendGuard         0x08b4049802999245888E72D0C31Fb4cA55C30E1B
+
+The full loop ran between two independent wallets with real OG — not a rehearsal:
+register https://chainscan-galileo.0g.ai/tx/0x4e15b95f5b2c91dc1bf9e112ed78c6418f4f954265c43b9d9f7053d415b2f249
+pay https://chainscan-galileo.0g.ai/tx/0xebee2bc6d95f505445a49caf8051209256abcbbf4e24c1f00194a7e8eef2a815
+attest https://chainscan-galileo.0g.ai/tx/0xd0a24968f092826fd90e298dc36acb64d193d3b11c6e11dec951b7c49aa063be
+
+WHERE THIS SITS RELATIVE TO x402
+AgentGate speaks the x402 V1 envelope — HTTP 402, accepts[], the X-PAYMENT header — so anything that parses an x402 challenge can read one of ours. But the settlement scheme is deliberately named exact-settled, not exact. 0G has no x402 facilitator, so the buyer settles first and presents a transaction hash instead of signing an authorization for a third party. Naming it differently makes a generic x402 client fail fast rather than hang forever. We do not claim compliance we do not have.
+
+BUILT WITH
+Solidity 0.8.28 pinned and tested with Foundry; viem for the chain client, with no indexer and no API key anywhere in the read path; TypeScript 5.6, Node 22, a Next.js dashboard, an MCP stdio server, and an Anthropic tool-use loop for the buyer agent. 460 TypeScript tests and 42 Foundry tests, green on main.
+
+LINKS
+Repo      https://github.com/agentgate-0g/0g-gate
+npm       https://www.npmjs.com/package/agentgate-0g
+Gateway   https://0g-gateway.mdloglabs.org
+Explorer  https://chainscan-galileo.0g.ai
+Faucet    https://faucet.0g.ai
+
+ONE HONEST NOTE
+The dashboard at 0:00 and 1:40 runs from the repo. Our hosted dashboard at agentgate.mdloglabs.org still serves the pre-migration build and does not yet read the 0G registry — re-pointing it is the first item on the roadmap. The contracts, gateway, CLI and SDK are live on 0G today.
+
+Built solo. MIT licensed.
+
+#0G #0GLabs #AIagents #x402 #HTTP402 #web3 #onchain #MCP #DePIN #micropayments
