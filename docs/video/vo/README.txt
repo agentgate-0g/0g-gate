@@ -27,3 +27,36 @@ Scene timings and on-screen cues: ../../VIDEO_VO_SCRIPT.md
 
 Merge when done:
   ffmpeg -i agentgate-demo-1080p.mp4 -i vo.wav -c:v copy -c:a aac -b:a 192k -shortest out.mp4
+
+---
+
+MUXING THE GENERATED AUDIO — two things bite.
+
+1. ElevenLabs output is very quiet. The file generated here measured -52.1 LUFS
+   integrated, peaking at -32.2 dBFS. Muxed as-is it is nearly inaudible next to
+   any other video. Normalise before muxing.
+
+2. It will not match 165.0s. One generation from all-scenes.txt came out 174.05s,
+   9 seconds long. `-shortest` would cut the closing line off. Fit it with atempo
+   instead: the script is budgeted per scene, so a uniform tempo change keeps each
+   paragraph inside its own scene (measured drift: 1.0s worst case, most under 0.3s).
+
+The pipeline that produced agentgate-demo-final-1080p.mp4:
+
+  # 1. measure
+  ffmpeg -i vo.mp3 -af loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json -f null -
+
+  # 2. normalise with the measured values from step 1
+  ffmpeg -i vo.mp3 -af "loudnorm=I=-16:TP=-1.5:LRA=11:measured_I=...:measured_TP=...\
+:measured_LRA=...:measured_thresh=...:offset=...:linear=true,aresample=48000" \
+    -ar 48000 -ac 1 vo_norm.wav
+
+  # 3. fit to the video length: atempo = audio_duration / 165.0
+  ffmpeg -i vo_norm.wav -af "atempo=1.054872,aresample=48000" -ar 48000 -ac 1 vo_fit.wav
+
+  # 4. mux — video copied, never re-encoded
+  ffmpeg -i agentgate-demo-1080p.mp4 -i vo_fit.wav -map 0:v -map 1:a \
+    -c:v copy -c:a aac -b:a 192k -movflags +faststart agentgate-demo-final-1080p.mp4
+
+Result: -16.05 LUFS integrated, -1.43 dBTP, speech present in all seven scene
+windows, video stream MD5-identical to the silent master.
