@@ -8,6 +8,10 @@ are the repo's own UI reading the **deployed 0G Galileo registry**. Nothing is m
 
 ---
 
+> **For recording, use [`VIDEO_VO_SCRIPT.md`](./VIDEO_VO_SCRIPT.md).** The VO lines below were
+> written before the video was rendered and run as fast as 226 wpm in Scene 7. The timecodes
+> here are correct; the words there are the ones that fit.
+
 ## Cue table
 
 | # | In | Out | Len | On screen | VO cue |
