@@ -1,0 +1,67 @@
+{
+  "name": "agentgate-0g",
+  "version": "1.0.0",
+  "description": "Wrap any HTTP API into a paid HTTP 402 service on 0G \u2014 micropayments in native OG with on-chain discovery and reputation, over the x402 V1 envelope.",
+  "type": "module",
+  "bin": {
+    "agentgate": "dist/bin.js",
+    "agentgate-0g": "dist/bin.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "author": "mdlog",
+  "homepage": "https://github.com/agentgate-0g/0g-gate#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agentgate-0g/0g-gate.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/agentgate-0g/0g-gate/issues"
+  },
+  "keywords": [
+    "0g",
+    "evm",
+    "x402",
+    "http-402",
+    "ai-agents",
+    "micropayments",
+    "agentgate",
+    "web3",
+    "cli"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "prepack": "tsup",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "commander": "^12.0.0",
+    "viem": "^2.56.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@agentgate/chain": "*",
+    "@agentgate/client": "*",
+    "@agentgate/shared": "*",
+    "@types/node": "^22.0.0",
+    "tsup": "^8.3.0"
+  }
+}

@@ -1,0 +1,105 @@
+import { docMeta } from '@/lib/seo';
+import { DocHeader, H2, M, P, DocLink, NextLinks } from '@/components/docs';
+
+export const metadata = docMeta(
+  '/docs/changelog',
+  'Changelog',
+  'Notable changes to AgentGate — the CLI, gateway, smart contracts and docs — newest first.',
+);
+
+export default function Page() {
+  return (
+    <>
+      <DocHeader
+        kicker="REFERENCE"
+        title="Changelog"
+        lede="Notable changes to AgentGate — the CLI, gateway, smart contracts and docs — newest first."
+      />
+
+      <H2 id="2026-08-31-v100">2026-08-31 — v1.0.0: AgentGate on 0G Galileo Testnet</H2>
+      <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-6 text-mut">
+        <li>
+          <strong className="text-white">Chain.</strong> AgentGate runs on{' '}
+          <strong className="text-white">0G Galileo Testnet</strong> — chain id <M>16602</M>, native{' '}
+          <M>OG</M>, 18 decimals. <M>AGENTGATE_MODE</M> reads <M>mock | live</M>; <M>live</M> is 0G.
+        </li>
+        <li>
+          <strong className="text-white">Three Solidity contracts</strong> under{' '}
+          <M>contracts-evm/</M>, pinned to <M>0.8.28</M> and tested with Foundry (42 tests).{' '}
+          <M>AgentGateRegistry</M> holds services, scores and a 100-entry attestation ring buffer;{' '}
+          <M>PaymentRouter</M> binds each payment to its invoice; <M>SpendGuard</M> is an escrow
+          spend firewall, implemented and tested but not yet wired into the request path. Ids are
+          1-based, auth is attestor-or-owner, and every contract timestamp is in{' '}
+          <strong className="text-white">milliseconds</strong>.
+        </li>
+        <li>
+          <strong className="text-white">Payments settle through a router.</strong> A plain value
+          transfer carries no reference to the invoice that asked for it, so{' '}
+          <M>PaymentRouter.pay(serviceId, nonce, payTo)</M> is what binds the two: it forwards the
+          whole value to the seller, emits <M>Paid</M> with <M>serviceId</M> and <M>nonce</M>{' '}
+          indexed, and rejects a repeat of that pair <em>on-chain</em>. The gateway verifies from
+          the transaction receipt — one exact log match, no scanning. The invoice store burns the
+          nonce too, so a replay is stopped twice over.
+        </li>
+        <li>
+          <strong className="text-white">No indexer, no API key.</strong> Reads are contract view
+          calls, history is <M>eth_getLogs</M>. Nothing in the read path needs a key to provision
+          or rate-limit you — <M>agentgate status</M> shows attestation history with zero
+          configuration.
+        </li>
+        <li>
+          <strong className="text-white">Native OG only, but multi-asset on-chain.</strong> Each
+          service stores an <M>accepts[]</M> price list in the contract, so an ERC-20 rail later is
+          a client change rather than a contract change. The floor is{' '}
+          <M>MIN_PRICE_WEI</M> = 1e12 wei (0.000001 OG) and there is no network minimum above it,
+          so per-call micropricing genuinely works.
+        </li>
+        <li>
+          <strong className="text-white">Keys and signatures.</strong> Signers are{' '}
+          <M>0x</M>-prefixed 32-byte hex private keys in <M>GATE_SIGNER_KEY</M>,{' '}
+          <M>BUYER_SIGNER_KEY</M> and <M>SELLER_SIGNER_KEY</M>; upstream mapping is authenticated
+          by an EIP-191 <M>personal_sign</M> challenge, with the signer recovered from the
+          signature. Mock mode uses the same <M>0x&lt;40 hex&gt;</M> address shape as live, so one
+          address code path is exercised everywhere.
+        </li>
+        <li>
+          <strong className="text-white">CLI v1.0.0.</strong> <M>--key &lt;0xhex&gt;</M>,{' '}
+          <M>--rpc-url</M>, <M>--registry &lt;address&gt;</M>, prices and caps in OG.{' '}
+          <strong className="text-white">Note the security shape:</strong> <M>--key</M> carries the
+          private key itself, so it lands in shell history and <M>ps</M> — the <M>*_SIGNER_KEY</M>{' '}
+          env vars are the documented path, and no error ever echoes a key value.
+        </li>
+        <li>
+          <strong className="text-white">Deployed and exercised on Galileo.</strong>{' '}
+          <M>AgentGateRegistry</M> at <M>0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA</M>,{' '}
+          <M>PaymentRouter</M> at <M>0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB</M>,{' '}
+          <M>SpendGuard</M> at <M>0x08b4049802999245888E72D0C31Fb4cA55C30E1B</M>. The full seller
+          and buyer paths have been run against them end to end — register, map, 402 invoice, pay,
+          replay with the payment proof, attest — and the dashboard reads that same chain state.
+        </li>
+        <li>
+          <strong className="text-white">Published as <M>agentgate-0g</M>.</strong> The 0G line is a
+          separate npm package, not a new version of the Casper-era one: the two target different
+          chains, and a shared version history would make the older releases look like something you
+          could upgrade from.
+        </li>
+      </ul>
+
+      <div className="mt-10 border-l-2 border-line/60 pl-4 text-sm leading-6 text-mut">
+        <strong className="text-white">Earlier releases are archived.</strong> AgentGate ran on a
+        different chain before v1.0.0, and those release notes describe a system that no longer
+        exists — dead contract addresses, retired CLI flags, env vars nothing reads. They are kept
+        verbatim in the repository at{' '}
+        <M>docs/archive/pre-0g/CHANGELOG.md</M> rather than shown here,
+        so that nothing on this page is something you could act on and be wrong.
+      </div>
+
+      <NextLinks
+        links={[
+          { href: '/docs/quickstart', label: 'Quickstart' },
+          { href: '/docs/contract', label: 'Smart contracts' },
+        ]}
+      />
+    </>
+  );
+}

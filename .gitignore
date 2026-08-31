@@ -1,0 +1,22 @@
+node_modules/
+.next/
+dist/
+target/
+.env
+.env.*
+!.env.example
+logs/
+data/
+coverage/
+*.tsbuildinfo
+# Signer private keys — NEVER commit (key material)
+/Priv_key_*/
+*.pem
+*_secret_key.pem
+keys/
+
+# Internal planning docs — kept local, not published
+/AgentGate-PRD-Solo-Build-Plan.md
+
+# npm pack artefacts
+*.tgz

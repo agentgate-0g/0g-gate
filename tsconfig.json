@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "agentgate-0g": ["./packages/cli/src/index.ts"]
+    }
+  },
+  "include": ["scripts/**/*.ts", "e2e/**/*.ts", "vitest.config.ts"]
+}

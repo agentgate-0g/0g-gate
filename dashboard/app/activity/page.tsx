@@ -1,0 +1,26 @@
+import type { Metadata } from 'next';
+import { ActivityFeed } from '@/components/activity-feed';
+
+export const metadata: Metadata = {
+  title: 'Activity',
+  description: 'Live on-chain feed of registrations, payments and attestations.',
+};
+
+export default function ActivityPage() {
+  return (
+    <div className="mx-auto max-w-6xl px-5 py-12 sm:px-8 sm:py-16">
+      <p className="microlabel text-accent">on-chain telemetry</p>
+      <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+        Activity
+      </h1>
+      <p className="mt-3 max-w-2xl text-sm leading-6 text-mut">
+        The on-chain ledger of everything AgentGate writes to 0G — service registrations, OG
+        payments, and reputation attestations — with live totals and per-type filtering, each row
+        linked to its transaction. Polled every 5 seconds.
+      </p>
+      <div className="mt-10">
+        <ActivityFeed />
+      </div>
+    </div>
+  );
+}

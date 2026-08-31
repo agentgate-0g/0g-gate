@@ -1,0 +1,19 @@
+{
+  "name": "@agentgate/chain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@agentgate/shared": "*",
+    "viem": "^2.56.0"
+  },
+  "devDependencies": {
+    "@agentgate/devnet": "*"
+  }
+}

@@ -1,0 +1,74 @@
+name: ci
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  # contracts-evm/lib is gitignored, so forge-std is not in a fresh checkout and
+  # every `forge` invocation below has to vendor it first. Pinned, not floating:
+  # a contract suite that silently retargets its standard library between runs
+  # is not a regression gate.
+  FORGE_STD_VERSION: v1.16.2
+
+jobs:
+  node:
+    name: typecheck · test · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # packages/chain/test/live-0g-{reads,writes}.test.ts spawn a real `anvil`
+      # and shell out to `forge create` against contracts-evm/. Without the
+      # toolchain those 21 tests fail in beforeAll rather than skipping — and a
+      # suite that cannot run looks exactly like one with nothing to say.
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Vendor forge-std
+        working-directory: contracts-evm
+        run: forge install foundry-rs/forge-std@${{ env.FORGE_STD_VERSION }} --no-git --shallow
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck (all workspaces + root scripts/e2e)
+        run: npm run typecheck
+
+      - name: Test (package units + e2e loop)
+        run: npm test
+
+      - name: Build dashboard
+        run: npm run build
+
+      - name: Demo (full offline loop, must exit 0)
+        run: npm run demo
+
+  contracts:
+    name: forge test (contracts-evm)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts-evm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Vendor forge-std
+        run: forge install foundry-rs/forge-std@${{ env.FORGE_STD_VERSION }} --no-git --shallow
+
+      - name: Test
+        run: forge test -vv
