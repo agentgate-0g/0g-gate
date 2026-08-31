@@ -1,0 +1,231 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>AgentGate demo render</title>
+<style>
+  :root{
+    --bg:#080a0d; --panel:#0e1116; --line:#1c2128; --ink:#c9d1d9; --dim:#6e7781;
+    --accent:#e5432f; --accent2:#ff6b4a; --ok:#3fb950; --cy:#58a6ff; --white:#f0f6fc;
+    --mono:"Noto Sans Mono","DejaVu Sans Mono","Liberation Mono",monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1920px;height:1080px;overflow:hidden;background:var(--bg)}
+  body{font-family:var(--mono);color:var(--ink);-webkit-font-smoothing:antialiased}
+
+  #bg{position:fixed;inset:0;
+    background:
+      radial-gradient(1200px 700px at 22% 10%, rgba(229,67,47,.11), transparent 62%),
+      radial-gradient(900px 600px at 86% 92%, rgba(88,166,255,.06), transparent 60%),
+      linear-gradient(180deg,#080a0d,#0a0d11);}
+  #grid{position:fixed;inset:0;opacity:.15;
+    background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:64px 64px;
+    -webkit-mask-image:radial-gradient(circle at 50% 42%,#000 26%,transparent 76%);}
+
+  #brand{position:fixed;left:64px;top:42px;display:flex;align-items:center;gap:15px;z-index:9}
+  #mark{width:34px;height:34px;border-radius:9px;background:var(--accent);
+        display:grid;place-items:center;color:#fff;font-weight:800;font-size:19px;font-family:system-ui}
+  #wordmark{font-size:23px;letter-spacing:.20em;font-weight:700;color:var(--white)}
+  #wordmark b{color:var(--accent);font-weight:700}
+  #chip{margin-left:6px;font-size:13px;letter-spacing:.15em;color:var(--dim);
+        border:1px solid var(--line);border-radius:5px;padding:5px 10px}
+  #scenetag{position:fixed;right:64px;top:47px;font-size:15px;letter-spacing:.22em;
+            color:var(--dim);text-transform:uppercase;z-index:9}
+  #scenetag em{color:var(--accent);font-style:normal}
+
+  #cap{position:fixed;left:96px;right:96px;bottom:56px;z-index:9}
+  #capline{height:2px;width:0;background:linear-gradient(90deg,var(--accent),rgba(229,67,47,0));margin-bottom:15px}
+  #captxt{font-size:29px;color:var(--white);line-height:1.32;font-weight:500}
+  #capsub{font-size:19px;color:var(--dim);margin-top:9px;line-height:1.45}
+
+  /* terminal — vertically anchored so short and long output both sit well */
+  #term{position:fixed;left:96px;width:1728px;
+        background:var(--panel);border:1px solid var(--line);border-radius:14px;
+        box-shadow:0 40px 120px rgba(0,0,0,.6);overflow:hidden;display:none}
+  #tbar{height:44px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px;
+        padding:0 18px;background:#0b0e12}
+  .dot{width:11px;height:11px;border-radius:50%}
+  #tpath{margin-left:14px;font-size:15px;color:var(--dim)}
+  #tbody{padding:22px 30px;white-space:pre-wrap;word-break:break-word;overflow:hidden}
+  .p{color:var(--accent);font-weight:700}
+  .cmd{color:var(--white)}
+  .cur{display:inline-block;width:11px;height:1em;background:var(--accent);
+       vertical-align:-.15em;margin-left:3px}
+  .hl{color:var(--accent2);font-weight:700}
+  .ok{color:var(--ok)} .cy{color:var(--cy)} .dim{color:var(--dim)}
+  .w{color:var(--white);font-weight:700} .box{color:#39424e}
+
+  /* dashboard stills, translated for a slow travel */
+  #stage{position:fixed;left:96px;top:126px;width:1728px;height:772px;border-radius:14px;
+         overflow:hidden;border:1px solid var(--line);box-shadow:0 40px 120px rgba(0,0,0,.6);
+         display:none;background:#0a0c10}
+  #shot{width:1728px;display:block;transform-origin:0 0}
+
+  #card{position:fixed;inset:0;display:none;place-items:center;z-index:5}
+  #cardin{width:1300px;margin-top:-40px}
+  #cardh{font-family:system-ui,sans-serif;font-size:78px;font-weight:800;color:var(--white);
+         line-height:1.04;letter-spacing:-.022em}
+  #cardh span{color:var(--accent)}
+  #cardsub{font-size:24px;color:var(--dim);margin-top:20px}
+  .addr{display:flex;justify-content:space-between;gap:30px;font-size:21px;padding:13px 0;
+        border-bottom:1px solid var(--line)}
+  .addr b{color:var(--ink);font-weight:400}
+  .addr code{color:var(--accent2)}
+  #cardfoot{margin-top:24px;font-size:22px;color:var(--ink);line-height:1.6}
+  #cardfoot em{color:var(--accent);font-style:normal}
+</style>
+
+<div id="bg"></div><div id="grid"></div>
+<div id="brand"><div id="mark">◈</div><div id="wordmark">AGENT<b>GATE</b></div>
+  <div id="chip">0G GALILEO TESTNET · CHAIN 16602</div></div>
+<div id="scenetag"></div>
+
+<div id="term">
+  <div id="tbar">
+    <div class="dot" style="background:#e5432f"></div>
+    <div class="dot" style="background:#d6a02a"></div>
+    <div class="dot" style="background:#3fb950"></div>
+    <div id="tpath"></div>
+  </div>
+  <div id="tbody"></div>
+</div>
+
+<div id="stage"><img id="shot" alt=""></div>
+
+<div id="cap"><div id="capline"></div><div id="captxt"></div><div id="capsub"></div></div>
+
+<div id="card"><div id="cardin">
+  <div id="cardh">Stripe for AI agents<br>on <span>0G.</span></div>
+  <div id="cardsub">Live on 0G Galileo Testnet — contracts, gateway, CLI and SDK.</div>
+  <div style="margin-top:32px">
+    <div class="addr"><b>AgentGateRegistry</b><code>0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA</code></div>
+    <div class="addr"><b>PaymentRouter</b><code>0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB</code></div>
+    <div class="addr"><b>SpendGuard</b><code>0x08b4049802999245888E72D0C31Fb4cA55C30E1B</code></div>
+  </div>
+  <div id="cardfoot">460 tests · 42 Foundry tests · <em>npx agentgate-0g list</em> — no key required<br>
+    <span style="color:#6e7781;font-size:19px">github.com/agentgate-0g/0g-gate · npm: agentgate-0g</span></div>
+</div></div>
+
+<script>
+const D = window.__DATA__ || {};
+const $ = s => document.querySelector(s);
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function paint(l){
+  let h = esc(l);
+  h = h.replace(/^([┌└│├═─\s]+)/, m => '<span class="box">'+m+'</span>');
+  h = h.replace(/(STEP \d+ · [A-Z0-9 ()·\-]+)/g, '<span class="w">$1</span>');
+  h = h.replace(/\b(0x[0-9a-fA-F]{6,})/g, '<span class="cy">$1</span>');
+  h = h.replace(/(HTTP\/2 402)/g, '<span class="hl">$1</span>');
+  h = h.replace(/(exact-settled|0g-galileo|0g-payment-router)/g, '<span class="hl">$1</span>');
+  h = h.replace(/(\d+(?:\.\d+)?)\s(OG)\b/g, '<span class="hl">$1 $2</span>');
+  h = h.replace(/\b(true|yes|confirmed)\b/g, '<span class="ok">$1</span>');
+  h = h.replace(/\b(\d\/\d)\b/g, '<span class="ok">$1</span>');
+  h = h.replace(/(← different[^<]*)/g, '<span class="hl">$1</span>');
+  return h;
+}
+
+const easeIO = t => t<.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
+const c01 = t => Math.max(0, Math.min(1, t));
+
+function showOnly(id){
+  for (const s of ['#term','#stage','#card']) $(s).style.display='none';
+  if (id) $(id).style.display = (id==='#card') ? 'grid' : 'block';
+}
+function caption(title, sub, t){
+  $('#captxt').innerHTML = title;
+  $('#capsub').innerHTML = sub || '';
+  $('#capline').style.width = (c01(t*4)*380)+'px';
+}
+
+function termScene(o, t){
+  showOnly('#term');
+  const fs = o.fs || 25, lh = 1.44;
+  const term = $('#term'), body = $('#tbody');
+  term.style.top = (o.top || 132)+'px';
+  term.style.height = (o.h || 790)+'px';
+  body.style.height = ((o.h || 790) - 44)+'px';
+  body.style.fontSize = fs+'px';
+  body.style.lineHeight = lh;
+  $('#tpath').textContent = o.path;
+
+  const typeEnd = o.typeEnd ?? .18, outEnd = o.outEnd ?? .72;
+  let html = '<span class="p">$</span> <span class="cmd">';
+  const tp = c01(t/typeEnd);
+  html += esc(o.cmd.slice(0, Math.round(o.cmd.length*tp))) + '</span>';
+  if (t < typeEnd) html += '<span class="cur"></span>';
+  if (t >= typeEnd){
+    const op = c01((t-typeEnd)/(outEnd-typeEnd));
+    const n = Math.round(o.out.length*easeIO(op));
+    if (n>0) html += '\n' + o.out.slice(0,n).map(paint).join('\n');
+    if (op >= 1 && o.cmd2){
+      const t2 = c01((t-outEnd)/(1-outEnd));
+      html += '\n\n<span class="p">$</span> <span class="cmd">'
+            + esc(o.cmd2.slice(0, Math.round(o.cmd2.length*c01(t2/.35)))) + '</span>';
+      if (t2 < .35) html += '<span class="cur"></span>';
+      if (t2 >= .35){
+        const n2 = Math.round(o.out2.length*c01((t2-.35)/.45));
+        if (n2>0) html += '\n' + o.out2.slice(0,n2).map(paint).join('\n');
+      }
+    }
+  }
+  body.innerHTML = html;
+  if (body.scrollHeight > body.clientHeight) body.scrollTop = body.scrollHeight;
+}
+
+function shotScene(o, t){
+  showOnly('#stage');
+  const img = $('#shot');
+  if (img.dataset.k !== o.src){ img.dataset.k = o.src; img.src = o.src; }
+  const h = o.h, travel = Math.max(0, h - 772);
+  img.style.transform = 'translateY(' + (-easeIO(c01(t))*travel*(o.span ?? 1)) + 'px)';
+}
+
+const SCENES = [
+  { id:'S0', tag:'01 · <em>What it is</em>', dur:18, run:t=>{
+      shotScene({src:'shots/landing.png', h:D.hLanding, span:.50}, t);
+      caption('Any HTTP API becomes a paid, on-chain service.',
+              'Agents discover it, pay per call, and leave a receipt on 0G. No cards, no accounts, no API keys.', t); } },
+
+  { id:'S1', tag:'02 · <em>Zero setup</em>', dur:22, run:t=>{
+      termScene({path:'/tmp — no clone, no config, no key', top:300, h:260, fs:26,
+                 cmd:'npx agentgate-0g@latest list', out:D.list, typeEnd:.22, outEnd:.52}, t);
+      caption('The live on-chain catalog, from an empty directory.',
+              'Every read is a public-RPC view call straight to the registry contract. No indexer anywhere in the path.', t); } },
+
+  { id:'S2', tag:'03 · <em>A real 402</em>', dur:25, run:t=>{
+      termScene({path:'the live gateway on 0G Galileo', top:126, h:766, fs:21,
+                 cmd:'curl -i https://0g-gateway.mdloglabs.org/svc/1',
+                 out:D.hdr402.concat(['']).concat(D.body402), typeEnd:.13, outEnd:.60,
+                 cmd2:'curl -s .../svc/1 | jq .accepts[0].extra.nonce',
+                 out2:['"'+D.nonceB+'"   ← different. single-use, burned on-chain.']}, t);
+      caption('A real HTTP 402, priced from the contract’s own on-chain list.',
+              'Scheme <span style="color:#ff6b4a">exact-settled</span>, not x402 <span style="color:#ff6b4a">exact</span> — 0G has no facilitator, so the buyer settles first and shows the tx hash.', t); } },
+
+  { id:'S3', tag:'04 · <em>The full loop</em>', dur:35, run:t=>{
+      termScene({path:'register → 402 → pay → serve → attest → score', top:126, h:766, fs:20,
+                 cmd:'npm run demo', out:D.demo, typeEnd:.07, outEnd:.82}, t);
+      caption('The whole loop end to end — register, 402, pay, serve, attest, score.',
+              'Mock chain here so it runs in under a second; the same code path runs against 0G Galileo.', t); } },
+
+  { id:'S4', tag:'05 · <em>Receipts, not ratings</em>', dur:30, run:t=>{
+      shotScene({src:'shots/activity.png', h:D.hActivity, span:.72}, t);
+      caption('Every registration, payment and attestation — written to 0G.',
+              'The trust score counts payments that actually settled. Every row links to the public explorer.', t); } },
+
+  { id:'S5', tag:'06 · <em>Any agent</em>', dur:22, run:t=>{
+      termScene({path:'claude_desktop_config.json → MCP tool call', top:150, h:730, fs:21,
+                 cmd:'cat claude_desktop_config.json', out:D.mcpcfg, typeEnd:.11, outEnd:.32,
+                 cmd2:'→ tools/call  agentgate_list_services', out2:D.mcp}, t);
+      caption('One line of config — discover, inspect and pay become native agent tools.',
+              'The three read tools need no key at all. The same npm package is also an importable SDK.', t); } },
+
+  { id:'S6', tag:'07 · <em>Live today</em>', dur:13, run:t=>{
+      showOnly('#card');
+      caption('Contracts, gateway, CLI and SDK are live on 0G Galileo.',
+              'Our hosted dashboard still runs the pre-migration build — that is the first item in the next wave.', t); } },
+];
+
+window.__SCENES = SCENES.map(s => ({id:s.id, dur:s.dur}));
+window.__render = (i, t) => { const s = SCENES[i];
+  $('#scenetag').innerHTML = s.tag; s.run(c01(t)); return s.id; };
+</script>

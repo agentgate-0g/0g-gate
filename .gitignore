@@ -20,3 +20,7 @@ keys/
 
 # npm pack artefacts
 *.tgz
+
+# rendered demo video — regenerate from docs/video/pipeline/
+docs/video/*.mp4
+docs/video/*.png
