@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { DEFAULT_PAYMENT_ROUTER_ADDRESS, DEFAULT_REGISTRY_ADDRESS, DEFAULT_SPEND_GUARD_ADDRESS } from '@agentgate/shared';
 import {
   Callout,
   CodeBlock,
@@ -514,9 +515,9 @@ export default function DeploymentPage() {
       <Callout tone="ok" title="Contracts are deployed">
         The three Solidity contracts are live on 0G Galileo Testnet (network <M>0g-galileo</M>,
         chain id <M>16602</M>) and are compiled into the CLI and gateway as defaults:{' '}
-        <M>0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA</M> (registry),{' '}
-        <M>0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB</M> (router) and{' '}
-        <M>0x08b4049802999245888E72D0C31Fb4cA55C30E1B</M> (spend guard). Set{' '}
+        <M>{DEFAULT_REGISTRY_ADDRESS}</M> (registry),{' '}
+        <M>{DEFAULT_PAYMENT_ROUTER_ADDRESS}</M> (router) and{' '}
+        <M>{DEFAULT_SPEND_GUARD_ADDRESS}</M> (spend guard). Set{' '}
         <M>REGISTRY_CONTRACT_ADDRESS</M> and <M>PAYMENT_ROUTER_ADDRESS</M> in <M>.env</M> only to
         point at a deployment of your own. See{' '}
         <DocLink href="/docs/contract#build-deploy">Contract → Build and deploy</DocLink>.

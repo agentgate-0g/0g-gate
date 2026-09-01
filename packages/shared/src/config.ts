@@ -15,9 +15,18 @@ export const DEFAULT_ADMIN_TOKEN = 'dev-admin-token';
  * state, so changing these values silently repoints every zero-config user at
  * a registry with no history. Treat an edit here as a breaking release.
  */
-export const DEFAULT_REGISTRY_ADDRESS = '0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA';
-export const DEFAULT_PAYMENT_ROUTER_ADDRESS = '0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB';
-export const DEFAULT_SPEND_GUARD_ADDRESS = '0x08b4049802999245888E72D0C31Fb4cA55C30E1B';
+// The audited set, deployed 2026-09-01 in block 52458928. This is not a
+// preference: the Service struct gained `pendingAttestor` and
+// `attestorEffectiveAt`, so this repo's ABI can no longer decode the previous
+// deployment at all — reading it fails with `Bytes value "18" is not a valid
+// boolean` as the decoder walks the wrong offsets. Code and contracts move
+// together or not at all.
+//
+// The published npm package still carries the previous addresses, so the
+// zero-config `npx agentgate-0g list` path is unaffected until a release.
+export const DEFAULT_REGISTRY_ADDRESS = '0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1';
+export const DEFAULT_PAYMENT_ROUTER_ADDRESS = '0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F';
+export const DEFAULT_SPEND_GUARD_ADDRESS = '0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781';
 
 /**
  * The router address mock mode advertises in its 402 invoices.

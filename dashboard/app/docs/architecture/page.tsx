@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { DEFAULT_PAYMENT_ROUTER_ADDRESS, DEFAULT_REGISTRY_ADDRESS } from '@agentgate/shared';
 import {
   Callout,
   DocHeader,
@@ -232,8 +233,8 @@ export default function ArchitecturePage() {
       />
       <Callout tone="ok" title="CONTRACTS ARE DEPLOYED">
         The three Solidity contracts are live on 0G Galileo and the CLI and gateway default to
-        them — <M>0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA</M> (registry) and{' '}
-        <M>0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB</M> (router). Override{' '}
+        them — <M>{DEFAULT_REGISTRY_ADDRESS}</M> (registry) and{' '}
+        <M>{DEFAULT_PAYMENT_ROUTER_ADDRESS}</M> (router). Override{' '}
         <M>REGISTRY_CONTRACT_ADDRESS</M> and <M>PAYMENT_ROUTER_ADDRESS</M> only to point at your
         own deployment; <M>CONTRACT_NOT_DEPLOYED</M> (HTTP 503) is thrown from every
         contract-dependent call when they are explicitly cleared. The live client is also

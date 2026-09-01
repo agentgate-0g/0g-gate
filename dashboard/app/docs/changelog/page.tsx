@@ -145,6 +145,20 @@ export default function Page() {
           env vars are the documented path, and no error ever echoes a key value.
         </li>
         <li>
+          <strong className="text-white">Audited contract set deployed.</strong> Three rounds of
+          security review closed sixteen findings across the registry, router and spend guard — a
+          settlement now proves the service was paid its listed price to its registered payout
+          address, a service owner can no longer witness its own score or erase a failure, and the
+          guard binds both the payee and the amount. The set is live at{' '}
+          <M>0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1</M> (registry),{' '}
+          <M>0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F</M> (router) and{' '}
+          <M>0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781</M> (spend guard), block 52458928.{' '}
+          <strong className="text-white">Not yet cut over:</strong> the CLI, the gateway and this
+          dashboard still read the original set below. The ABIs differ, so the contracts and the
+          gateway have to switch together, and the new registry starts from empty state — no
+          service and no reputation carries across.
+        </li>
+        <li>
           <strong className="text-white">Deployed and exercised on Galileo.</strong>{' '}
           <M>AgentGateRegistry</M> at <M>0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA</M>,{' '}
           <M>PaymentRouter</M> at <M>0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB</M>,{' '}

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { DEFAULT_REGISTRY_ADDRESS } from '@agentgate/shared';
 import { CommandBlock } from '@/components/copy';
 import {
   Callout,
@@ -564,7 +565,7 @@ export default function Page() {
       </P>
       <Callout tone="ok" title="ALREADY DEPLOYED — THIS IS THE RECIPE">
         The contracts are already live on 0G Galileo — <M>AgentGateRegistry</M> at{' '}
-        <M>0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA</M> — and what follows is the runbook that
+        <M>{DEFAULT_REGISTRY_ADDRESS}</M> — and what follows is the runbook that
         produced them, kept so the deploy is reproducible on a key of your own. Deploying all three
         costs roughly{' '}
         <strong>0.014 OG</strong> at 0G&rsquo;s ~4 gwei — comfortably inside a single day&rsquo;s
