@@ -135,14 +135,12 @@ the video still reads correctly if someone watches it muted.
 
 ## Scene 7 · `2:32 – 2:45` — Live today
 
-> **EN.** Contracts, gateway, CLI and SDK are live on 0G Galileo today. One thing isn't: our hosted
-> dashboard still runs the pre-migration build — everything you just saw runs from the repo.
-> Re-pointing it is first in our next wave. Try it right now: `npx agentgate-0g list`. No key required.
+> **EN.** Contracts, gateway, dashboard, CLI and SDK are all live on 0G Galileo today — every
+> surface is hosted. Next is an ERC-20 rail over the price list that is already on-chain. Try it
+> right now: `npx agentgate-0g list`. No key required.
 
-> **ID.** Kontrak, gateway, CLI dan SDK sudah live di 0G Galileo hari ini. Satu hal belum: dashboard
-> yang kami host masih menjalankan build lama — semua yang barusan Anda lihat berjalan dari repo.
-> Memindahkannya jadi prioritas pertama di wave berikutnya. Coba sekarang: `npx agentgate-0g list`.
-> Tanpa key.
+> **ID.** Kontrak, gateway, dashboard, CLI dan SDK semuanya sudah live di 0G Galileo hari ini —
+> setiap permukaan ter-host. Berikutnya rail ERC-20. Coba sekarang: `npx agentgate-0g list`.
 
 > 📌 **Keep the admission.** The Wave 3 form text already states this gap. A judge who runs
 > `npx agentgate-0g list` and then opens the hosted dashboard finds the mismatch anyway — naming it
@@ -202,4 +200,4 @@ Stated plainly so nobody is surprised by a question:
   key present is the service's own payout address — a self-payment is served but never attested, so
   the score would visibly fail to move. Scene 4 uses the mock chain and says so; Scene 5 carries the
   real on-chain proof. To add a live buy, follow `DEMO_RUNBOOK.md` §4 and re-record Scene 4.
-- **No hosted dashboard.** By design — it still serves the pre-migration build (`DEMO_RUNBOOK.md` §0).
+- **The hosted Casper dashboard.** `agentgate.mdloglabs.org` without the `0g-` prefix is a separate, older deployment and must not appear (`DEMO_RUNBOOK.md` §0). The 0G one is `agentgate-0g.mdloglabs.org`.

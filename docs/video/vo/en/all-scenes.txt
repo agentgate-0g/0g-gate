@@ -10,4 +10,4 @@ And this is the same system reading zero-G back. Every registration, every payme
 
 And you don't have to use our CLI. One line of config, and any MCP-capable agent gets discover, inspect and pay as native tools, under a spend cap. The three read tools need no key at all. The same NPM package is also an importable SDK. CLI, MCP server and library, one install.
 
-Contracts, gateway, CLI and SDK are live on zero-G Galileo today. One thing isn't. Our hosted dashboard still runs the old build. That's next. Try it: N-P-X agentgate zero-G list.
+Contracts, gateway, dashboard, CLI and SDK are all live on zero-G Galileo today. Everything you just saw is hosted, not a local build. Try it: N-P-X agentgate zero-G list.

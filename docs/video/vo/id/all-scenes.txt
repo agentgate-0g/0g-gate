@@ -10,4 +10,4 @@ Dan ini sistem yang sama membaca kembali dari zero-G. Setiap registrasi, setiap 
 
 Dan Anda tidak harus memakai CLI kami. Satu baris konfigurasi, dan agen apa pun yang mendukung MCP langsung punya tool discover, inspect, dan pay secara native, dengan batas belanja. Tiga tool baca sama sekali tidak butuh key. Paket NPM yang sama juga bisa di-import sebagai SDK.
 
-Kontrak, gateway, CLI dan SDK sudah live di zero-G Galileo hari ini. Satu hal belum. Dashboard yang kami host masih build lama. Itu prioritas berikutnya. Coba: N-P-X agentgate zero-G list.
+Kontrak, gateway, dashboard, CLI dan SDK semuanya sudah live di zero-G Galileo hari ini. Semua yang barusan Anda lihat ter-host, bukan build lokal. Coba: N-P-X agentgate zero-G list.

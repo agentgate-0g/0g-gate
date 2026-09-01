@@ -44,7 +44,7 @@ Green tests are not evidence: one passed for months because a dead import made b
 
 The Galileo deployment landed: `AgentGateRegistry`, `PaymentRouter` and `SpendGuard` are live on chain 16602 (addresses in the README), with the CLI, MCP server and SDK on npm as `agentgate-0g`. The full loop ran between two independent wallets with real OG — register `0x4e15b95f…`, pay `0xebee2bc6…`, attest `0xd0a24968…`. Verify it: `npx agentgate-0g list`. 460 TypeScript and 42 Foundry tests green on main.
 
-One surface did not migrate: the hosted dashboard still serves the pre-migration build, so the catalog and ledger in the demo run from the repo. Re-pointing it is first.
+Every surface is hosted: the gateway at `0g-gateway.mdloglabs.org` and the dashboard at `agentgate-0g.mdloglabs.org`, both reading that deployment. Mind the `0g-` prefix: without it is an older Casper one.
 
 Then: re-seed the RWA oracle into the live registry; an authorization-settled ERC-20 rail — the on-chain `accepts[]` anticipates it, no contract change needed (a router-settled one would need a settlement path in `PaymentRouter`); `SpendGuard` in the request path, enforcing budgets on-chain not in the client; and staking-weighted attestations with slashing, since today's score counts payments but stakes nothing.
 

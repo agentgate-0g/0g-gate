@@ -229,10 +229,9 @@ github.com/agentgate-0g/0g-gate  ·  npm: agentgate-0g
 ```
 
 **🎙️ VO (EN)**
-> Contracts, gateway, CLI and SDK are live on 0G Galileo today. One thing isn't: our hosted
-> dashboard still runs the pre-migration build — everything you just saw runs from the repo.
-> Re-pointing it is the first item in our next wave, along with an ERC-20 rail over the price
-> list that's already on-chain. Try it right now: `npx agentgate-0g list`. No key required.
+> Contracts, gateway, dashboard, CLI and SDK are all live on 0G Galileo today — everything you
+> just saw is hosted, not a local build. Next is an ERC-20 rail over the price list that is
+> already on-chain. Try it right now: `npx agentgate-0g list`. No key required.
 
 **🎙️ VO (ID)**
 > Kontrak, gateway, CLI dan SDK sudah live di 0G Galileo hari ini. Satu hal belum: dashboard yang

@@ -140,13 +140,11 @@ and npm package.
 
 **Cue:** the video ends at 2:45,0. Finish speaking by 2:43 so the last card breathes.
 
-> Contracts, gateway, CLI and SDK are live on 0G Galileo today. One thing isn't — our hosted
-> dashboard still runs the old build. That's next. Try it: npx agentgate-0g list.
+> Contracts, gateway, CLI and SDK are live on 0G Galileo today. Everything you just saw is hosted and live. Try it: npx agentgate-0g list.
 
 **ID:**
 
-> Kontrak, gateway, CLI dan SDK sudah live di 0G Galileo hari ini. Satu hal belum — dashboard
-> yang kami host masih build lama. Itu prioritas berikutnya. Coba: npx agentgate-0g list.
+> Kontrak, gateway, CLI dan SDK sudah live di 0G Galileo hari ini. Semua yang barusan Anda lihat sudah live dan ter-host. Coba: npx agentgate-0g list.
 
 ---
 

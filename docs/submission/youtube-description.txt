@@ -45,8 +45,8 @@ Gateway   https://0g-gateway.mdloglabs.org
 Explorer  https://chainscan-galileo.0g.ai
 Faucet    https://faucet.0g.ai
 
-ONE HONEST NOTE
-The dashboard at 0:00 and 1:40 runs from the repo. Our hosted dashboard at agentgate.mdloglabs.org still serves the pre-migration build and does not yet read the 0G registry — re-pointing it is the first item on the roadmap. The contracts, gateway, CLI and SDK are live on 0G today.
+EVERY SURFACE IS HOSTED
+Dashboard https://agentgate-0g.mdloglabs.org · Gateway https://0g-gateway.mdloglabs.org · Contracts on chain 16602. Mind the 0g- prefix: agentgate.mdloglabs.org without it is an older Casper deployment, still running separately.
 
 Built solo. MIT licensed.
 

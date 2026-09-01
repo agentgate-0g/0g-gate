@@ -8,20 +8,19 @@ Pair with [`VIDEO_SCRIPT.md`](./VIDEO_SCRIPT.md) — that is the shot list, this
 
 ---
 
-## 0. The one rule that outranks everything
+## 0. Use the right hostname
 
-> ### ❌ NEVER show `agentgate.mdloglabs.org` on camera.
+> ### The 0G dashboard is `agentgate-0g.mdloglabs.org`.
 >
-> The hosted dashboard still serves the **pre-migration Casper build**. `/api/services`
-> returns `network: casper-test` with prices in CSPR. A judge who sees a Casper page in a
-> 0G submission stops believing the rest of the video.
+> `agentgate.mdloglabs.org` (no `0g-`) is the **older Casper dashboard**, still
+> running alongside: `/api/services` there reports `network: casper-test` with
+> prices in CSPR. Showing it in a 0G demo would undo the video's credibility.
 >
-> **Use the LOCAL dashboard built from this repo** (§3). It is the 0G one. Verified: 0 occurrences
-> of "casper" on every page, `network: 0g-galileo` in every API response.
+> Verified on the 0G host: `network: 0g-galileo`, the `#x402-relationship`
+> section is present, 24 mentions of `exact-settled`, zero of "casper".
 
-The hosted **gateway** (`0g-gateway.mdloglabs.org`) is fine — it *is* on 0G. Only the dashboard host is stale.
-
----
+Either the hosted 0G dashboard or a local production build works on camera —
+they serve the same build from the same registry.
 
 ## 1. Machine state — check before every take
 

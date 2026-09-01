@@ -11,9 +11,7 @@
 [![license](https://img.shields.io/npm/l/agentgate-0g.svg)](LICENSE)
 [![0G Galileo Testnet](https://img.shields.io/badge/0G-Galileo%20Testnet-6d28d9.svg)](https://chainscan-galileo.0g.ai)
 
-**[Dashboard](https://agentgate.mdloglabs.org)** · **[Gateway](https://0g-gateway.mdloglabs.org)** · **[npm](https://www.npmjs.com/package/agentgate-0g)** · **[Docs](https://agentgate.mdloglabs.org/docs)** · **[Explorer](https://chainscan-galileo.0g.ai)** · **[Faucet](https://faucet.0g.ai)**
-
-_The hosted dashboard and docs still serve the pre-migration Casper build — the screenshot below is the 0G build in this repo. The gateway, the deployed contracts and the CLI are live on 0G ([Roadmap](#roadmap))._
+**[Dashboard](https://agentgate-0g.mdloglabs.org)** · **[Gateway](https://0g-gateway.mdloglabs.org)** · **[npm](https://www.npmjs.com/package/agentgate-0g)** · **[Docs](https://agentgate-0g.mdloglabs.org/docs)** · **[Explorer](https://chainscan-galileo.0g.ai)** · **[Faucet](https://faucet.0g.ai)**
 
 [![AgentGate dashboard — live catalog of on-chain registered services](docs/assets/dashboard.png)](https://agentgate.mdloglabs.org)
 
@@ -174,7 +172,7 @@ It does **not** implement x402's `exact` settlement scheme, and says so on the w
 
 0G has no x402 facilitator, so settled-proof is the rail that can actually ship there — no third party in the money path, and the gateway custodies nothing. Advertising `scheme:"exact"` would promise an interop we cannot honour: a generic x402 client would sign an authorization and be 402'd forever. The distinct name makes it fail fast instead. The on-chain `accepts[]` price list is the seam where an authorization-based rail could be added later without touching the contracts.
 
-> Full component breakdown: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · engineering contract: [docs/SPEC.md](docs/SPEC.md), whose opening note states this same x402 relationship in spec form. The hosted [/docs/protocol](https://agentgate.mdloglabs.org/docs/protocol) page still runs the pre-migration build and does not yet carry this section.
+> Full component breakdown: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · engineering contract: [docs/SPEC.md](docs/SPEC.md) · protocol detail: [/docs/protocol](https://agentgate-0g.mdloglabs.org/docs/protocol#x402-relationship).
 
 ---
 
@@ -292,11 +290,11 @@ None of the three is upgradable — there is no proxy, so a redeploy is a **new 
 
 ## Deployment and hosting
 
-**Currently hosted:** the 0G gateway runs at **https://0g-gateway.mdloglabs.org** and the dashboard at **https://agentgate.mdloglabs.org** (cloudflared tunnels → local services). The CLI is published to npm as [`agentgate-0g`](https://www.npmjs.com/package/agentgate-0g) and defaults to that gateway.
+**Currently hosted:** the 0G gateway runs at **https://0g-gateway.mdloglabs.org** and the dashboard at **https://agentgate-0g.mdloglabs.org** (cloudflared tunnels → local services). The CLI is published to npm as [`agentgate-0g`](https://www.npmjs.com/package/agentgate-0g) and defaults to that gateway.
 
 > `gateway.mdloglabs.org` (no `0g-` prefix) is the **older Casper deployment**, kept running separately. It is a different chain with a different registry, so pointing `--gateway` at it registers a service on 0G that the gateway cannot map — the on-chain registration is real and is not rolled back, while `/svc/<id>` 404s.
 
-> The **hosted dashboard is still the pre-migration Casper build** — `agentgate.mdloglabs.org/api/services` reports `network: casper-test` and prices in CSPR. Only the gateway has been cut over to 0G. The dashboard *in this repo* is the 0G one; re-pointing the hosted deployment at it is the first item under [Roadmap → Next](#roadmap).
+> Mind the hostname: `agentgate.mdloglabs.org` (no `0g-`) is the **older Casper dashboard**, still running alongside — `/api/services` there reports `network: casper-test` and prices in CSPR. The 0G one is `agentgate-0g.mdloglabs.org`.
 
 <details>
 <summary><b>Deploy runbook and self-hosting</b></summary>
@@ -325,7 +323,6 @@ None of the three is upgradable — there is no proxy, so a redeploy is a **new 
 
 **Next**
 
-- Re-point the hosted dashboard at 0G — the contracts are deployed and the hosted gateway already serves them, but https://agentgate.mdloglabs.org still runs the pre-migration build
 - ERC-20 rail over the existing on-chain `accepts[]` — authorization-settled, so a client change, not a contract change
 - Wire `SpendGuard` into the request path as an on-chain spend firewall
 - Staking-weighted attestations with slashing
