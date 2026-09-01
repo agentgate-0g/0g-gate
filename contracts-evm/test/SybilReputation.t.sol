@@ -15,6 +15,7 @@ contract SybilReputationTest is Test {
     address seller = address(0x5E11E7);
     address payout = address(0xBEEF01);
     address sybil  = address(0x51B11);
+    address witness = address(0x717E55); // attestor must be a third party now
 
     function setUp() public {
         router = new PaymentRouter();
@@ -31,7 +32,7 @@ contract SybilReputationTest is Test {
             symbol: "OG", name: "", version: ""
         });
         vm.prank(seller);
-        id = reg.registerService("svc", "d", "https://g.example", a, payout, seller);
+        id = reg.registerService("svc", "d", "https://g.example", a, payout, witness);
     }
 
     /// The listed price is 1e15 wei to `payout`. A settlement of 1 wei paid to
@@ -42,14 +43,13 @@ contract SybilReputationTest is Test {
     /// as proof anyway. Skipped, not deleted: un-skip it the moment pay() binds
     /// payTo/amount, and it becomes the regression test for that fix.
     function test_oneWeiSelfDirectedPaymentIsNotProofOfService() public {
-        vm.skip(true);
         uint64 id = _register();
 
         vm.prank(sybil);
         router.pay{value: 1}(id, 1, sybil); // 1 wei, to itself, not to payout
 
         vm.expectRevert();
-        vm.prank(seller); // seller is the attestor it named at registration
+        vm.prank(witness);
         reg.recordAttestation(id, 1, sybil, bytes32(uint256(1)), true);
 
         (uint64 total,) = reg.getScore(id);
@@ -62,7 +62,7 @@ contract SybilReputationTest is Test {
         uint64 id = _register();
         vm.prank(sybil);
         router.pay{value: 1e15}(id, 2, payout);
-        vm.prank(seller);
+        vm.prank(witness);
         reg.recordAttestation(id, 2, sybil, bytes32(uint256(2)), true);
         (uint64 total, uint64 succ) = reg.getScore(id);
         assertEq(total, 1);

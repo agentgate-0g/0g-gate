@@ -25,6 +25,9 @@ contract AgentGateRegistry {
     /// Per-service attestation ring-buffer capacity (keep the newest 100).
     uint256 public constant MAX_ATTESTATIONS = 100;
 
+    /// How long an attestor rotation waits before it takes effect.
+    uint64 public constant ATTESTOR_ROTATION_DELAY_MS = 15 * 60 * 1000;
+
     /// One accepted way to pay for a call — an entry in a service's price list.
     /// `asset == address(0)` means native OG; any other value is an ERC-20.
     /// `name`/`version` are EIP-712 domain fields, empty for native.
@@ -48,6 +51,9 @@ contract AgentGateRegistry {
         address paymentTarget;
         address owner;
         address attestor;
+        /// Rotation target, authoritative only from `attestorEffectiveAt`.
+        address pendingAttestor;
+        uint64 attestorEffectiveAt; // unix MS, 0 = no rotation pending
         bool active;
         uint64 createdAt; // unix MS
     }
@@ -66,6 +72,10 @@ contract AgentGateRegistry {
     error InvalidPrice();
     error NoSuchPayment();
     error SelfPayment();
+    error Underpaid();
+    error NoNativeOption();
+    error InvalidAttestor();
+    error InvalidPaymentTarget();
     error EmptyName();
 
     event ServiceRegistered(
@@ -95,7 +105,21 @@ contract AgentGateRegistry {
     ) external returns (uint64 serviceId) {
         if (_isBlank(name)) revert EmptyName();
         if (accepts.length == 0) revert InvalidPrice();
+        if (paymentTarget == address(0)) revert InvalidPaymentTarget();
+        // The subject of a score cannot be its own witness. Without this the
+        // owner names itself attestor in the same call that registers the
+        // service, restoring exactly the self-certification the attestor role
+        // exists to remove.
+        if (attestor == address(0) || attestor == msg.sender || attestor == paymentTarget) {
+            revert InvalidAttestor();
+        }
         for (uint256 i = 0; i < accepts.length; i++) {
+            // `decimals` is seller-declared and feeds the floor, so for the one
+            // asset the chain actually knows — native OG — pin it. Otherwise
+            // declaring `decimals = 0` collapses the floor from 1e12 to 1 wei.
+            if (accepts[i].asset == address(0) && accepts[i].decimals != 18) {
+                revert InvalidPrice();
+            }
             if (accepts[i].amount < _minPrice(accepts[i].decimals)) revert InvalidPrice();
         }
 
@@ -126,6 +150,18 @@ contract AgentGateRegistry {
     /// @notice Fetch a service record. Reverts ServiceNotFound for unknown ids.
     function getService(uint64 serviceId) external view returns (Service memory) {
         return _loadService(serviceId);
+    }
+
+    /// @notice Everything a settlement path needs about `serviceId`: who to pay
+    ///         and the listed native price. One narrow call rather than
+    ///         `getService`, whose return size the seller controls.
+    function settlementTermsOf(uint64 serviceId)
+        external
+        view
+        returns (address paymentTarget, uint256 nativePrice)
+    {
+        Service storage s = _loadService(serviceId);
+        return (s.paymentTarget, _nativePrice(s));
     }
 
     /// @notice Just the payout target for `serviceId`, without the rest of the
@@ -179,22 +215,38 @@ contract AgentGateRegistry {
 
         // The subject of a score is not a witness for it. The owner was
         // previously accepted here, so a seller minted its own reputation.
+        _promoteAttestor(s);
         if (msg.sender != s.attestor) revert NotAuthorized();
 
         // `active` deliberately does NOT gate this. It is a discovery flag;
         // gating the ledger on it let an owner front-run a failure attestation
         // with setActive(false) and erase the failure without a trace.
 
-        // Every point must map to a settlement the chain can see. Before this,
-        // `paymentTxHash` was an unconstrained bytes32 and a perfect score cost
-        // only gas.
-        bytes32 paymentKey = ROUTER.nonceKey(serviceId, nonce, payer);
-        if (!ROUTER.seenNonce(paymentKey)) revert NoSuchPayment();
+        // Every point must map to a settlement that paid THIS service ITS
+        // price. Asking the router only "was this nonce used" was not enough:
+        // it is set by one wei sent to any address, including the payer's own,
+        // so a perfect score still cost nothing. Querying with our OWN
+        // paymentTarget means a payment misdirected anywhere else simply is
+        // not found, and the amount check rejects dust.
+        uint256 paid = ROUTER.settledAmount(
+            ROUTER.settlementKey(serviceId, nonce, payer, s.paymentTarget)
+        );
+        if (paid == 0) revert NoSuchPayment();
+        if (paid < _nativePrice(s)) revert Underpaid();
+
+        // Dedup on (serviceId, nonce, payer): one score per settlement,
+        // whatever display hash the attestor supplies alongside it.
+        bytes32 paymentKey = keccak256(abi.encode(serviceId, nonce, payer));
 
         // On-chain anti-wash-trading, mirroring the gateway's isSelfPayment.
         // Note this stops the literal self-pay, not a sybil paying from a fresh
         // address — that needs the staked attestations on the roadmap.
-        if (payer == s.owner || payer == s.paymentTarget) revert SelfPayment();
+        // The witness is as interested a party as the owner: without
+        // `payer != s.attestor` the attestor pays itself and signs off on it,
+        // a self-contained two-call loop needing no sybil at all.
+        if (payer == s.owner || payer == s.paymentTarget || payer == s.attestor) {
+            revert SelfPayment();
+        }
 
         if (seenPayments[serviceId][paymentKey]) revert DuplicateAttestation();
         seenPayments[serviceId][paymentKey] = true;
@@ -236,8 +288,43 @@ contract AgentGateRegistry {
     function setAttestor(uint64 serviceId, address attestor) external {
         Service storage s = _loadService(serviceId);
         if (msg.sender != s.owner) revert NotAuthorized();
-        s.attestor = attestor;
+        if (attestor == address(0) || attestor == s.owner || attestor == s.paymentTarget) {
+            revert InvalidAttestor();
+        }
+        // Fold in any rotation that has already matured, so a second call
+        // cannot be used to skip the delay on the first.
+        _promoteAttestor(s);
+        s.pendingAttestor = attestor;
+        s.attestorEffectiveAt = _nowMs() + ATTESTOR_ROTATION_DELAY_MS;
         emit ServiceAttestorChanged(serviceId, attestor);
+    }
+
+    /// @notice Who may attest right now, accounting for a matured rotation that
+    ///         no write has folded in yet.
+    function effectiveAttestor(uint64 serviceId) external view returns (address) {
+        Service storage s = _loadService(serviceId);
+        if (s.attestorEffectiveAt != 0 && _nowMs() >= s.attestorEffectiveAt) {
+            return s.pendingAttestor;
+        }
+        return s.attestor;
+    }
+
+    /// Rotation is DELAYED, not immediate, and this is load-bearing. An instant
+    /// rotation let the owner front-run a pending failure attestation: the
+    /// attestor's tx reverts NotAuthorized, nothing is written, and the failure
+    /// disappears — the same censorship the `active` flag used to allow. A mere
+    /// grace period for the outgoing attestor is not enough either, because the
+    /// owner simply rotates twice. Keeping the INCUMBENT authoritative until
+    /// the delay elapses is what makes an in-flight attestation unrevocable.
+    ///
+    /// The cost is that replacing a compromised signer takes the delay. That is
+    /// bounded: an attestor can only score settlements that actually happened.
+    function _promoteAttestor(Service storage s) internal {
+        if (s.attestorEffectiveAt != 0 && _nowMs() >= s.attestorEffectiveAt) {
+            s.attestor = s.pendingAttestor;
+            s.pendingAttestor = address(0);
+            s.attestorEffectiveAt = 0;
+        }
     }
 
     /// @notice (totalCalls, successCalls). (0, 0) for unknown or unattested services.
@@ -285,6 +372,17 @@ contract AgentGateRegistry {
     function _loadService(uint64 serviceId) internal view returns (Service storage s) {
         s = _services[serviceId];
         if (s.owner == address(0)) revert ServiceNotFound();
+    }
+
+    /// The service's listed price in native OG. Reverts when the service has
+    /// no native option — such a service cannot be settled by PaymentRouter at
+    /// all, so it must not be scoreable through it either.
+    function _nativePrice(Service storage s) internal view returns (uint256) {
+        uint256 n = s.accepts.length;
+        for (uint256 i = 0; i < n; i++) {
+            if (s.accepts[i].asset == address(0)) return s.accepts[i].amount;
+        }
+        revert NoNativeOption();
     }
 
     /// The dust floor for one payment option, in that option's own atomic

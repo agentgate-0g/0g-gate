@@ -31,6 +31,11 @@ let registryAddress: `0x${string}`;
 let client: Live0gClient;
 let registerBlockTimestampMs: number;
 const account = privateKeyToAccount(DEPLOYER);
+// The registry now refuses a service whose attestor is its own owner or payout
+// address — the subject of a score cannot be its witness — so these are three
+// distinct accounts.
+const payTarget = anvilAccount(1);
+const attestorAcct = anvilAccount(2);
 
 function deploy(name: string, ...ctorArgs: string[]): `0x${string}` {
   // Router -> Registry(router) -> Guard(registry): the registry verifies
@@ -67,7 +72,7 @@ beforeAll(async () => {
       'weather', 'forecast API', 'https://gateway.example',
       [{ asset: '0x0000000000000000000000000000000000000000', amount: parseEther('0.001'),
          decimals: 18, symbol: 'OG', name: '', version: '' }],
-      account.address, account.address,
+      payTarget.address, attestorAcct.address,
     ],
   });
   const receipt = await pub.waitForTransactionReceipt({ hash });
@@ -96,8 +101,8 @@ describe('Live0gClient reads', () => {
     expect(s!.endpointUrl).toBe('https://gateway.example/svc/1');
     expect(s!.priceWei).toBe('1000000000000000');
     expect(s!.owner).toBe(account.address.toLowerCase());
-    expect(s!.attestor).toBe(account.address.toLowerCase());
-    expect(s!.paymentTarget).toBe(account.address.toLowerCase());
+    expect(s!.attestor).toBe(attestorAcct.address.toLowerCase());
+    expect(s!.paymentTarget).toBe(payTarget.address.toLowerCase());
     expect(s!.active).toBe(true);
     expect(s!.accepts).toHaveLength(1);
     expect(s!.accepts![0]!.asset).toBe('native');

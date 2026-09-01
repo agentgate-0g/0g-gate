@@ -22,6 +22,19 @@ export const REGISTRY_ABI = [
   },
   {
     "type": "function",
+    "name": "ATTESTOR_ROTATION_DELAY_MS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_ATTESTATIONS",
     "inputs": [],
     "outputs": [
@@ -55,6 +68,25 @@ export const REGISTRY_ABI = [
         "name": "",
         "type": "address",
         "internalType": "contract PaymentRouter"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "effectiveAttestor",
+    "inputs": [
+      {
+        "name": "serviceId",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -201,6 +233,16 @@ export const REGISTRY_ABI = [
             "name": "attestor",
             "type": "address",
             "internalType": "address"
+          },
+          {
+            "name": "pendingAttestor",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "attestorEffectiveAt",
+            "type": "uint64",
+            "internalType": "uint64"
           },
           {
             "name": "active",
@@ -420,6 +462,30 @@ export const REGISTRY_ABI = [
   },
   {
     "type": "function",
+    "name": "settlementTermsOf",
+    "inputs": [
+      {
+        "name": "serviceId",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "paymentTarget",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "nativePrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "successCalls",
     "inputs": [
       {
@@ -618,7 +684,22 @@ export const REGISTRY_ABI = [
   },
   {
     "type": "error",
+    "name": "InvalidAttestor",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidPaymentTarget",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidPrice",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoNativeOption",
     "inputs": []
   },
   {
@@ -645,39 +726,15 @@ export const REGISTRY_ABI = [
     "type": "error",
     "name": "ServiceNotFound",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Underpaid",
+    "inputs": []
   }
 ] as const;
 
 export const PAYMENT_ROUTER_ABI = [
-  {
-    "type": "function",
-    "name": "nonceKey",
-    "inputs": [
-      {
-        "name": "serviceId",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "nonce",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "payer",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "pure"
-  },
   {
     "type": "function",
     "name": "pay",
@@ -703,7 +760,7 @@ export const PAYMENT_ROUTER_ABI = [
   },
   {
     "type": "function",
-    "name": "seenNonce",
+    "name": "settledAmount",
     "inputs": [
       {
         "name": "",
@@ -714,11 +771,45 @@ export const PAYMENT_ROUTER_ABI = [
     "outputs": [
       {
         "name": "",
-        "type": "bool",
-        "internalType": "bool"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "settlementKey",
+    "inputs": [
+      {
+        "name": "serviceId",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "payTo",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
   },
   {
     "type": "event",
@@ -796,6 +887,19 @@ export const SPEND_GUARD_ABI = [
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "MAX_TRUST_TIER",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -918,6 +1022,11 @@ export const SPEND_GUARD_ABI = [
             "internalType": "uint8"
           },
           {
+            "name": "restrictToAllowlist",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
             "name": "paused",
             "type": "bool",
             "internalType": "bool"
@@ -984,6 +1093,11 @@ export const SPEND_GUARD_ABI = [
         "name": "minTrustTier",
         "type": "uint8",
         "internalType": "uint8"
+      },
+      {
+        "name": "restrictToAllowlist",
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "outputs": [
@@ -1049,6 +1163,53 @@ export const SPEND_GUARD_ABI = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "serviceAllowed",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setServiceAllowed",
+    "inputs": [
+      {
+        "name": "policyId",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "serviceId",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "allowed",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -1212,6 +1373,31 @@ export const SPEND_GUARD_ABI = [
   },
   {
     "type": "event",
+    "name": "ServiceAllowedChanged",
+    "inputs": [
+      {
+        "name": "policyId",
+        "type": "uint64",
+        "indexed": true,
+        "internalType": "uint64"
+      },
+      {
+        "name": "serviceId",
+        "type": "uint64",
+        "indexed": true,
+        "internalType": "uint64"
+      },
+      {
+        "name": "allowed",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "Withdrawn",
     "inputs": [
       {
@@ -1277,12 +1463,22 @@ export const SPEND_GUARD_ABI = [
   },
   {
     "type": "error",
+    "name": "ServiceNotAllowed",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "TransferFailed",
     "inputs": []
   },
   {
     "type": "error",
     "name": "UntrustedService",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WrongAmount",
     "inputs": []
   },
   {

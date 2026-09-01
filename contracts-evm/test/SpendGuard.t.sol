@@ -35,6 +35,10 @@ contract SpendGuardTest is Test {
 
         SVC_TRUSTED = _registerService();
         SVC_NEW = _registerService();
+        // Every price the debit tests settle at needs a service listing it.
+        _seedSvc(1 ether); _seedSvc(2 ether); _seedSvc(0.3 ether);
+        _seedSvc(0.5 ether); _seedSvc(0.05 ether); _seedSvc(0.1 ether);
+        _seedSvc(1e15);
         // 25 settled successes puts SVC_TRUSTED in the top tier; SVC_NEW is
         // left unattested so it sits at tier 0.
         for (uint256 i = 1; i <= 25; i++) {
@@ -43,6 +47,37 @@ contract SpendGuardTest is Test {
             vm.prank(address(this));
             reg.recordAttestation(SVC_TRUSTED, i, svcBuyer, bytes32(uint256(i)), true);
         }
+    }
+
+    /// A trusted service listing exactly `price`, memoised so the 25-settlement
+    /// seeding runs once per distinct price. debit now requires the amount to
+    /// equal the service's listed price, so a test that debits X needs a
+    /// service that charges X.
+    mapping(uint256 => uint64) internal _svcByPrice;
+
+    /// Lookup only — seeding happens in setUp, because registering pranks as
+    /// the owner and these are called inside a `vm.prank(gate)` argument list.
+    function _svc(uint256 price) internal view returns (uint64) {
+        return _svcByPrice[price];
+    }
+
+    function _seedSvc(uint256 price) internal returns (uint64 id) {
+        id = _svcByPrice[price];
+        if (id != 0) return id;
+        AgentGateRegistry.PaymentOption[] memory a =
+            new AgentGateRegistry.PaymentOption[](1);
+        a[0] = AgentGateRegistry.PaymentOption({
+            asset: address(0), amount: price, decimals: 18,
+            symbol: "OG", name: "", version: ""
+        });
+        vm.prank(owner);
+        id = reg.registerService("svc", "d", "https://g.example", a, payTo, address(this));
+        for (uint256 i = 1; i <= 25; i++) {
+            vm.prank(svcBuyer);
+            router.pay{value: price}(id, i, payTo);
+            reg.recordAttestation(id, i, svcBuyer, bytes32(uint256(i)), true);
+        }
+        _svcByPrice[price] = id;
     }
 
     /// paymentTarget is `payTo`, attestor is this test, so debits can settle.
@@ -59,7 +94,7 @@ contract SpendGuardTest is Test {
 
     function _open() internal returns (uint64 id) {
         vm.prank(owner);
-        id = guard.openPolicy(gate, BUDGET, PER_CALL, WINDOW_MS, MAX_CALLS, MIN_TIER);
+        id = guard.openPolicy(gate, BUDGET, PER_CALL, WINDOW_MS, MAX_CALLS, MIN_TIER, false);
     }
 
     function _openFunded(uint256 amount) internal returns (uint64 id) {
@@ -92,13 +127,13 @@ contract SpendGuardTest is Test {
     function test_openPolicy_revertsOnInvalidConfig() public {
         vm.startPrank(owner);
         vm.expectRevert(SpendGuard.InvalidConfig.selector);
-        guard.openPolicy(gate, BUDGET, 0, WINDOW_MS, MAX_CALLS, MIN_TIER); // zero cap
+        guard.openPolicy(gate, BUDGET, 0, WINDOW_MS, MAX_CALLS, MIN_TIER, false); // zero cap
         vm.expectRevert(SpendGuard.InvalidConfig.selector);
-        guard.openPolicy(gate, BUDGET, PER_CALL, WINDOW_MS, 0, MIN_TIER); // zero rate
+        guard.openPolicy(gate, BUDGET, PER_CALL, WINDOW_MS, 0, MIN_TIER, false); // zero rate
         vm.expectRevert(SpendGuard.InvalidConfig.selector);
-        guard.openPolicy(gate, 0, PER_CALL, WINDOW_MS, MAX_CALLS, MIN_TIER); // zero budget
+        guard.openPolicy(gate, 0, PER_CALL, WINDOW_MS, MAX_CALLS, MIN_TIER, false); // zero budget
         vm.expectRevert(SpendGuard.InvalidConfig.selector);
-        guard.openPolicy(gate, 1 ether, 2 ether, WINDOW_MS, MAX_CALLS, MIN_TIER); // cap > budget
+        guard.openPolicy(gate, 1 ether, 2 ether, WINDOW_MS, MAX_CALLS, MIN_TIER, false); // cap > budget
         vm.stopPrank();
     }
 
@@ -132,9 +167,9 @@ contract SpendGuardTest is Test {
         uint256 payToBefore = payTo.balance;
 
         vm.expectEmit(true, true, true, true, address(guard));
-        emit SpendGuard.DebitApproved(id, SVC_TRUSTED, 1 ether, payTo, ref, 4 ether);
+        emit SpendGuard.DebitApproved(id, _svc(1 ether), 1 ether, payTo, ref, 4 ether);
         vm.prank(gate);
-        guard.debit(id, SVC_TRUSTED, 1 ether, payTo, ref);
+        guard.debit(id, _svc(1 ether), 1 ether, payTo, ref);
 
         assertEq(payTo.balance - payToBefore, 1 ether);
         SpendGuard.Policy memory p = guard.getPolicy(id);
@@ -149,7 +184,7 @@ contract SpendGuardTest is Test {
         // PolicyNotFound before NotAuthorized (stranger on a missing policy)
         vm.expectRevert(SpendGuard.PolicyNotFound.selector);
         vm.prank(address(0xDEAD));
-        guard.debit(99, SVC_TRUSTED, 1 ether, payTo, ref);
+        guard.debit(99, _svc(1 ether), 1 ether, payTo, ref);
 
         // NotAuthorized before Paused: pause first, so the next call
         // violates BOTH rules (wrong caller on an already-paused policy)
@@ -158,13 +193,13 @@ contract SpendGuardTest is Test {
         guard.pause(id, true);
         vm.expectRevert(SpendGuard.NotAuthorized.selector);
         vm.prank(address(0xDEAD));
-        guard.debit(id, SVC_TRUSTED, 1 ether, payTo, ref);
+        guard.debit(id, _svc(1 ether), 1 ether, payTo, ref);
 
         // Paused before ZeroAmount: still paused, correct caller, zero
         // amount — both rules violated, Paused must still win.
         vm.expectRevert(SpendGuard.Paused.selector);
         vm.prank(gate);
-        guard.debit(id, SVC_TRUSTED, 0, payTo, ref);
+        guard.debit(id, _svc(0), 0, payTo, ref);
         vm.prank(owner);
         guard.pause(id, false);
 
@@ -173,18 +208,18 @@ contract SpendGuardTest is Test {
         // exceed it. This only confirms ZeroAmount still fires in position.
         vm.expectRevert(SpendGuard.ZeroAmount.selector);
         vm.prank(gate);
-        guard.debit(id, SVC_TRUSTED, 0, payTo, ref);
+        guard.debit(id, _svc(0), 0, payTo, ref);
 
         // PerCallExceeded before UntrustedService (over cap AND untrusted —
         // both rules violated, PerCallExceeded must still win).
         vm.expectRevert(SpendGuard.PerCallExceeded.selector);
         vm.prank(gate);
-        guard.debit(id, SVC_TRUSTED, 2 ether, payTo, ref);
+        guard.debit(id, _svc(2 ether), 2 ether, payTo, ref);
 
         // Burn `ref` legitimately so the next case can combine an
         // already-seen ref with an untrusted caller.
         vm.prank(gate);
-        guard.debit(id, SVC_TRUSTED, 1 ether, payTo, ref);
+        guard.debit(id, _svc(1 ether), 1 ether, payTo, ref);
 
         // UntrustedService before DuplicateRef: ref is already burned AND
         // the caller is untrusted — both rules violated, UntrustedService
@@ -198,15 +233,15 @@ contract SpendGuardTest is Test {
         // ref, then reuse it while asking for more than the balance — both
         // rules violated, DuplicateRef must still win.
         vm.prank(owner);
-        uint64 id2 = guard.openPolicy(gate, BUDGET, PER_CALL, WINDOW_MS, MAX_CALLS, MIN_TIER);
+        uint64 id2 = guard.openPolicy(gate, BUDGET, PER_CALL, WINDOW_MS, MAX_CALLS, MIN_TIER, false);
         vm.prank(owner);
         guard.deposit{value: 0.5 ether}(id2);
         bytes32 ref2 = bytes32(uint256(2));
         vm.prank(gate);
-        guard.debit(id2, SVC_TRUSTED, 0.3 ether, payTo, ref2); // balance -> 0.2 ether
+        guard.debit(id2, _svc(0.3 ether), 0.3 ether, payTo, ref2); // balance -> 0.2 ether
         vm.expectRevert(SpendGuard.DuplicateRef.selector);
         vm.prank(gate);
-        guard.debit(id2, SVC_TRUSTED, 0.5 ether, payTo, ref2); // also > balance
+        guard.debit(id2, _svc(0.5 ether), 0.5 ether, payTo, ref2); // also > balance
 
         // OverBudget before RateExceeded: fill id2's rate window to its cap
         // with two more small, freshly-refed debits, then request an
@@ -214,51 +249,51 @@ contract SpendGuardTest is Test {
         // rules violated, OverBudget must still win. This is the one pair
         // the suite never previously exercised at all.
         vm.prank(gate);
-        guard.debit(id2, SVC_TRUSTED, 0.05 ether, payTo, bytes32(uint256(3))); // balance -> 0.15
+        guard.debit(id2, _svc(0.05 ether), 0.05 ether, payTo, bytes32(uint256(3))); // balance -> 0.15
         vm.prank(gate);
-        guard.debit(id2, SVC_TRUSTED, 0.05 ether, payTo, bytes32(uint256(4))); // balance -> 0.10, window full (3/3)
+        guard.debit(id2, _svc(0.05 ether), 0.05 ether, payTo, bytes32(uint256(4))); // balance -> 0.10, window full (3/3)
         vm.expectRevert(SpendGuard.OverBudget.selector);
         vm.prank(gate);
-        guard.debit(id2, SVC_TRUSTED, 1 ether, payTo, bytes32(uint256(5)));
+        guard.debit(id2, _svc(1 ether), 1 ether, payTo, bytes32(uint256(5)));
     }
 
     function test_debit_revertsOverEscrowBalance() public {
         uint64 id = _openFunded(0.5 ether);
         vm.expectRevert(SpendGuard.OverBudget.selector);
         vm.prank(gate);
-        guard.debit(id, SVC_TRUSTED, 1 ether, payTo, bytes32(uint256(1)));
+        guard.debit(id, _svc(1 ether), 1 ether, payTo, bytes32(uint256(1)));
     }
 
     function test_debit_revertsOverCumulativeBudget() public {
         // budget 2 ether, cap 1 ether, escrow 5 ether: the 3rd call breaches budget
         vm.prank(owner);
-        uint64 id = guard.openPolicy(gate, 2 ether, 1 ether, WINDOW_MS, 10, 0);
+        uint64 id = guard.openPolicy(gate, 2 ether, 1 ether, WINDOW_MS, 10, 0, false);
         vm.prank(owner);
         guard.deposit{value: 5 ether}(id);
 
         vm.prank(gate);
-        guard.debit(id, SVC_TRUSTED, 1 ether, payTo, bytes32(uint256(1)));
+        guard.debit(id, _svc(1 ether), 1 ether, payTo, bytes32(uint256(1)));
         vm.prank(gate);
-        guard.debit(id, SVC_TRUSTED, 1 ether, payTo, bytes32(uint256(2)));
+        guard.debit(id, _svc(1 ether), 1 ether, payTo, bytes32(uint256(2)));
         vm.expectRevert(SpendGuard.OverBudget.selector);
         vm.prank(gate);
-        guard.debit(id, SVC_TRUSTED, 1 ether, payTo, bytes32(uint256(3)));
+        guard.debit(id, _svc(1 ether), 1 ether, payTo, bytes32(uint256(3)));
     }
 
     function test_debit_rateWindowBlocksThenReopens() public {
         uint64 id = _openFunded(10 ether);
         for (uint256 i = 1; i <= MAX_CALLS; i++) {
             vm.prank(gate);
-            guard.debit(id, SVC_TRUSTED, 0.1 ether, payTo, bytes32(i));
+            guard.debit(id, _svc(0.1 ether), 0.1 ether, payTo, bytes32(i));
         }
         vm.expectRevert(SpendGuard.RateExceeded.selector);
         vm.prank(gate);
-        guard.debit(id, SVC_TRUSTED, 0.1 ether, payTo, bytes32(uint256(99)));
+        guard.debit(id, _svc(0.1 ether), 0.1 ether, payTo, bytes32(uint256(99)));
 
         // roll past the window (windowMs is MS; block.timestamp is SECONDS)
         vm.warp(block.timestamp + (WINDOW_MS / 1000) + 1);
         vm.prank(gate);
-        guard.debit(id, SVC_TRUSTED, 0.1 ether, payTo, bytes32(uint256(100)));
+        guard.debit(id, _svc(0.1 ether), 0.1 ether, payTo, bytes32(uint256(100)));
     }
 
     /// Pins the partial-prune ("shift-down") branch of the rate-window
@@ -275,27 +310,27 @@ contract SpendGuardTest is Test {
         uint256 t0 = block.timestamp;
 
         vm.prank(gate);
-        guard.debit(id, SVC_TRUSTED, 0.1 ether, payTo, bytes32(uint256(1))); // t0
+        guard.debit(id, _svc(0.1 ether), 0.1 ether, payTo, bytes32(uint256(1))); // t0
 
         vm.warp(t0 + 30);
         vm.prank(gate);
-        guard.debit(id, SVC_TRUSTED, 0.1 ether, payTo, bytes32(uint256(2))); // t0+30s
+        guard.debit(id, _svc(0.1 ether), 0.1 ether, payTo, bytes32(uint256(2))); // t0+30s
 
         vm.warp(t0 + 45);
         vm.prank(gate);
-        guard.debit(id, SVC_TRUSTED, 0.1 ether, payTo, bytes32(uint256(3))); // t0+45s
+        guard.debit(id, _svc(0.1 ether), 0.1 ether, payTo, bytes32(uint256(3))); // t0+45s
 
         // t0 is now 61s old (>= the 60s window) and prunes; the other two
         // (31s and 16s old) survive and shift down. One slot is free.
         vm.warp(t0 + 61);
         vm.prank(gate);
-        guard.debit(id, SVC_TRUSTED, 0.1 ether, payTo, bytes32(uint256(4)));
+        guard.debit(id, _svc(0.1 ether), 0.1 ether, payTo, bytes32(uint256(4)));
 
         // The window (2 survivors + this new entry) is immediately full
         // again, so a second call at the same timestamp must revert.
         vm.expectRevert(SpendGuard.RateExceeded.selector);
         vm.prank(gate);
-        guard.debit(id, SVC_TRUSTED, 0.1 ether, payTo, bytes32(uint256(5)));
+        guard.debit(id, _svc(0.1 ether), 0.1 ether, payTo, bytes32(uint256(5)));
     }
 
     function test_withdraw_ownerOnlyAndWorksWhilePaused() public {
@@ -364,13 +399,13 @@ contract SpendGuardTest is Test {
     function test_openPolicy_rejectsSubSecondWindow() public {
         vm.expectRevert(SpendGuard.InvalidConfig.selector);
         vm.prank(owner);
-        guard.openPolicy(gate, BUDGET, PER_CALL, 0, MAX_CALLS, MIN_TIER);
+        guard.openPolicy(gate, BUDGET, PER_CALL, 0, MAX_CALLS, MIN_TIER, false);
     }
 
     function test_openPolicy_rejectsZeroGate() public {
         vm.expectRevert(SpendGuard.InvalidConfig.selector);
         vm.prank(owner);
-        guard.openPolicy(address(0), BUDGET, PER_CALL, WINDOW_MS, MAX_CALLS, MIN_TIER);
+        guard.openPolicy(address(0), BUDGET, PER_CALL, WINDOW_MS, MAX_CALLS, MIN_TIER, false);
     }
 
     // ─── AUDIT #4 — the trust rule must come from the chain, not the caller ───
@@ -388,7 +423,7 @@ contract SpendGuardTest is Test {
     function test_debit_allowsAServiceThatEarnedTheTierOnChain() public {
         uint64 id = _openFunded(5 ether);
         vm.prank(gate);
-        guard.debit(id, SVC_TRUSTED, 1 ether, payTo, keccak256("r-trusted"));
+        guard.debit(id, _svc(1 ether), 1 ether, payTo, keccak256("r-trusted"));
         assertEq(guard.getRemaining(id), 4 ether);
     }
 
@@ -399,5 +434,73 @@ contract SpendGuardTest is Test {
         vm.expectRevert(SpendGuard.WrongPayee.selector);
         vm.prank(gate);
         guard.debit(id, SVC_TRUSTED, 1 ether, address(0xDEAD), keccak256("r-payee"));
+    }
+
+    // ─── AUDIT R5 — the amount must be the service's listed price ───────────
+
+    /// perCallCap was the ONLY bound on amount, so a gate could pay its cap for
+    /// a service listing far less — the same "constrained party sets the value"
+    /// defect that moved trustTier on-chain, left in place for the money.
+    function test_debit_revertsWhenAmountIsNotTheListedPrice() public {
+        uint64 id = _openFunded(5 ether);
+        // SVC_TRUSTED lists 1e15; paying the policy's full per-call cap for it
+        // is exactly the overcharge perCallCap alone could not prevent.
+        vm.expectRevert(SpendGuard.WrongAmount.selector);
+        vm.prank(gate);
+        guard.debit(id, SVC_TRUSTED, 1 ether, payTo, keccak256("r-overpay"));
+    }
+
+    function test_debit_acceptsTheListedPrice() public {
+        uint64 id = _openFunded(5 ether);
+        vm.prank(gate);
+        guard.debit(id, _svc(1e15), 1e15, payTo, keccak256("r-listed"));
+        assertEq(guard.getRemaining(id), 5 ether - 1e15);
+    }
+
+    // ─── AUDIT R8 — a gate must not be able to mint its own counterparty ────
+
+    /// registerService is permissionless, so the WrongPayee and tier rules are
+    /// both satisfiable by a registry entry the gate writes for itself. An
+    /// allowlist is the only thing that binds a policy to counterparties its
+    /// OWNER chose.
+    function test_debit_revertsForAServiceNotOnAnEnforcedAllowlist() public {
+        vm.prank(owner);
+        uint64 id = guard.openPolicy(gate, BUDGET, PER_CALL, WINDOW_MS, MAX_CALLS, 0, true);
+        vm.prank(owner);
+        guard.deposit{value: 5 ether}(id);
+
+        vm.expectRevert(SpendGuard.ServiceNotAllowed.selector);
+        vm.prank(gate);
+        guard.debit(id, _svc(1e15), 1e15, payTo, keccak256("r-notallowed"));
+    }
+
+    function test_debit_allowsAServiceTheOwnerListed() public {
+        vm.prank(owner);
+        uint64 id = guard.openPolicy(gate, BUDGET, PER_CALL, WINDOW_MS, MAX_CALLS, 0, true);
+        vm.prank(owner);
+        guard.deposit{value: 5 ether}(id);
+        vm.prank(owner);
+        guard.setServiceAllowed(id, _svc(1e15), true);
+
+        vm.prank(gate);
+        guard.debit(id, _svc(1e15), 1e15, payTo, keccak256("r-allowed"));
+        assertEq(guard.getRemaining(id), 5 ether - 1e15);
+    }
+
+    function test_setServiceAllowed_ownerOnly() public {
+        vm.prank(owner);
+        uint64 id = guard.openPolicy(gate, BUDGET, PER_CALL, WINDOW_MS, MAX_CALLS, 0, true);
+        vm.expectRevert(SpendGuard.NotAuthorized.selector);
+        vm.prank(gate);
+        guard.setServiceAllowed(id, SVC_TRUSTED, true);
+    }
+
+    // ─── a minTrustTier no service can reach is the funds trap openPolicy
+    //     rejects everywhere else ──────────────────────────────────────────
+
+    function test_openPolicy_rejectsAnUnreachableTrustTier() public {
+        vm.expectRevert(SpendGuard.InvalidConfig.selector);
+        vm.prank(owner);
+        guard.openPolicy(gate, BUDGET, PER_CALL, WINDOW_MS, MAX_CALLS, 3, false);
     }
 }

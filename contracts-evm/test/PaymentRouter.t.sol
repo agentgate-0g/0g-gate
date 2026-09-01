@@ -100,7 +100,7 @@ contract PaymentRouterTest is Test {
         vm.prank(buyer);
         try router.pay{value: 1e15}(7, 55, address(bad)) {} catch {}
         // the whole call reverted, so the nonce must still be spendable
-        assertFalse(router.seenNonce(router.nonceKey(7, 55, buyer)));
+        assertEq(router.settledAmount(router.settlementKey(7, 55, buyer, address(bad))), 0);
         vm.prank(buyer);
         router.pay{value: 1e15}(7, 55, payTo);
         assertEq(payTo.balance, 1e15);

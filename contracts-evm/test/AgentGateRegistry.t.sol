@@ -257,9 +257,13 @@ contract AgentGateRegistryTest is Test {
 
         vm.prank(owner);
         reg.setAttestor(id, rotated);
-        assertEq(reg.getService(id).attestor, rotated);
+        // Rotation is DELAYED so it cannot be used to censor an in-flight
+        // attestation — the incumbent stays authoritative until it matures.
+        assertEq(reg.effectiveAttestor(id), attestor);
+        vm.warp(block.timestamp + (reg.ATTESTOR_ROTATION_DELAY_MS() / 1000) + 1);
+        assertEq(reg.effectiveAttestor(id), rotated);
 
-        // the rotated key can attest; the old one can no longer
+        // once matured the rotated key can attest; the old one can no longer
         vm.prank(rotated);
         reg.recordAttestation(id, 1, buyer, bytes32(uint256(1)), true);
         vm.expectRevert(AgentGateRegistry.NotAuthorized.selector);
@@ -349,5 +353,126 @@ contract AgentGateRegistryTest is Test {
         vm.expectRevert(AgentGateRegistry.InvalidPrice.selector);
         vm.prank(owner);
         reg.registerService("fx", "d", "https://g.example", a, payTarget, attestor);
+    }
+
+    // ─── AUDIT R2 — the subject must not be able to name itself as witness ───
+
+    function test_registerService_rejectsSelfAsAttestor() public {
+        vm.expectRevert(AgentGateRegistry.InvalidAttestor.selector);
+        vm.prank(owner);
+        reg.registerService("s", "d", "u", _nativeAccepts(1e15), payTarget, owner);
+    }
+
+    function test_registerService_rejectsPayoutAddressAsAttestor() public {
+        vm.expectRevert(AgentGateRegistry.InvalidAttestor.selector);
+        vm.prank(owner);
+        reg.registerService("s", "d", "u", _nativeAccepts(1e15), payTarget, payTarget);
+    }
+
+    function test_setAttestor_rejectsRotatingToTheOwner() public {
+        uint64 id = _register();
+        vm.expectRevert(AgentGateRegistry.InvalidAttestor.selector);
+        vm.prank(owner);
+        reg.setAttestor(id, owner);
+    }
+
+    // ─── AUDIT R4 — the attestor must not score its own payment ─────────────
+
+    function test_recordAttestation_revertsWhenTheAttestorPaidItself() public {
+        uint64 id = _register();
+        vm.deal(attestor, 10 ether);
+        vm.prank(attestor);
+        router.pay{value: 1e15}(id, 77, payTarget);
+
+        vm.expectRevert(AgentGateRegistry.SelfPayment.selector);
+        vm.prank(attestor);
+        reg.recordAttestation(id, 77, attestor, bytes32(uint256(77)), true);
+    }
+
+    // ─── AUDIT R7 — a native option must declare the native scale ───────────
+
+    function test_registerService_rejectsNativeOptionWithWrongDecimals() public {
+        AgentGateRegistry.PaymentOption[] memory a =
+            new AgentGateRegistry.PaymentOption[](1);
+        a[0] = AgentGateRegistry.PaymentOption({
+            asset: address(0), amount: 1, decimals: 0, // would collapse the floor to 1 wei
+            symbol: "OG", name: "", version: ""
+        });
+        vm.expectRevert(AgentGateRegistry.InvalidPrice.selector);
+        vm.prank(owner);
+        reg.registerService("s", "d", "u", a, payTarget, attestor);
+    }
+
+    // ─── zero addresses that permanently break a service ────────────────────
+
+    function test_registerService_rejectsZeroPaymentTarget() public {
+        vm.expectRevert(AgentGateRegistry.InvalidPaymentTarget.selector);
+        vm.prank(owner);
+        reg.registerService("s", "d", "u", _nativeAccepts(1e15), address(0), attestor);
+    }
+
+    function test_registerService_rejectsZeroAttestor() public {
+        vm.expectRevert(AgentGateRegistry.InvalidAttestor.selector);
+        vm.prank(owner);
+        reg.registerService("s", "d", "u", _nativeAccepts(1e15), payTarget, address(0));
+    }
+
+    // ─── AUDIT R3 — rotation must not revoke the incumbent instantly ────────
+
+    /// The censorship closed on setActive was still open via setAttestor: the
+    /// owner front-runs a pending failure attestation with a rotation, the
+    /// attestor's tx reverts NotAuthorized, and the failure vanishes. A grace
+    /// window alone does not fix it — the owner just rotates twice. Rotation
+    /// itself is therefore delayed: the incumbent stays authoritative until it
+    /// matures, so an in-flight attestation can never be revoked out from under
+    /// it.
+    function test_setAttestor_doesNotRevokeTheIncumbentImmediately() public {
+        uint64 id = _register();
+        _settle(id, 31);
+
+        vm.prank(owner);
+        reg.setAttestor(id, address(0xF00D)); // owner tries to censor
+
+        // The incumbent can still record the failure in the same block.
+        vm.prank(attestor);
+        reg.recordAttestation(id, 31, buyer, bytes32(uint256(31)), false);
+        (uint64 total, uint64 succ) = reg.getScore(id);
+        assertEq(total, 1);
+        assertEq(succ, 0);
+    }
+
+    /// Rotating twice must not expire the incumbent early either.
+    function test_setAttestor_repeatedRotationCannotRevokeEarly() public {
+        uint64 id = _register();
+        _settle(id, 32);
+        vm.startPrank(owner);
+        reg.setAttestor(id, address(0xF00D));
+        reg.setAttestor(id, address(0xBEEF));
+        vm.stopPrank();
+
+        vm.prank(attestor);
+        reg.recordAttestation(id, 32, buyer, bytes32(uint256(32)), false);
+        (uint64 total,) = reg.getScore(id);
+        assertEq(total, 1);
+    }
+
+    /// After the delay the new attestor takes over and the old one is done.
+    function test_setAttestor_rotationTakesEffectAfterTheDelay() public {
+        uint64 id = _register();
+        address rotated = address(0xF00D);
+        vm.prank(owner);
+        reg.setAttestor(id, rotated);
+
+        vm.warp(block.timestamp + (reg.ATTESTOR_ROTATION_DELAY_MS() / 1000) + 1);
+        _settle(id, 33);
+
+        vm.expectRevert(AgentGateRegistry.NotAuthorized.selector);
+        vm.prank(attestor);
+        reg.recordAttestation(id, 33, buyer, bytes32(uint256(33)), true);
+
+        vm.prank(rotated);
+        reg.recordAttestation(id, 33, buyer, bytes32(uint256(33)), true);
+        (uint64 total,) = reg.getScore(id);
+        assertEq(total, 1);
     }
 }

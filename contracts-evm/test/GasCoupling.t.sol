@@ -50,12 +50,12 @@ contract GasCouplingTest is Test {
 
     function _debitGas(uint64 svc) internal returns (uint256) {
         vm.prank(owner);
-        uint64 pid = guard.openPolicy(gate, 10 ether, 1 ether, 60_000, 100, 2);
+        uint64 pid = guard.openPolicy(gate, 10 ether, 1 ether, 60_000, 100, 2, false);
         vm.prank(owner);
         guard.deposit{value: 5 ether}(pid);
         vm.prank(gate);
         uint256 before = gasleft();
-        guard.debit(pid, svc, 1 ether, payTo, keccak256(abi.encode(svc)));
+        guard.debit(pid, svc, 1e15, payTo, keccak256(abi.encode(svc)));
         return before - gasleft();
     }
 

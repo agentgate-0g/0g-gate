@@ -10,6 +10,14 @@ import {AgentGateRegistry} from "./AgentGateRegistry.sol";
 ///         atomically on any violation, so the payment never settles.
 ///         All timestamps are UNIX MILLISECONDS, matching `windowMs`.
 contract SpendGuard {
+    /// Highest tier `_tierOf` can return. A policy demanding more than this
+    /// would accept deposits and revert every debit forever — the same funds
+    /// trap `openPolicy`'s other checks exist to prevent.
+    uint8 public constant MAX_TRUST_TIER = 2;
+
+    /// policyId => serviceId => may this policy pay it?
+    mapping(uint64 => mapping(uint64 => bool)) public serviceAllowed;
+
     /// The registry this guard reads scores and payout targets from.
     AgentGateRegistry public immutable REGISTRY;
 
@@ -29,6 +37,11 @@ contract SpendGuard {
         uint64 windowMs;
         uint32 maxCallsInWindow;
         uint8 minTrustTier;
+        /// When true, `debit` only pays serviceIds the OWNER listed. Registration
+        /// is permissionless, so without this the payee and tier rules are both
+        /// satisfiable by a registry entry the gate writes for itself — the
+        /// firewall would bind nothing a rogue gate could not mint.
+        bool restrictToAllowlist;
         bool paused;
         uint64 createdAt; // unix MS
     }
@@ -39,6 +52,8 @@ contract SpendGuard {
     error ZeroAmount();
     error ZeroPayTo();
     error WrongPayee();
+    error WrongAmount();
+    error ServiceNotAllowed();
     error PerCallExceeded();
     error UntrustedService();
     error DuplicateRef();
@@ -68,6 +83,7 @@ contract SpendGuard {
         bytes32 paymentRef,
         uint256 remaining
     );
+    event ServiceAllowedChanged(uint64 indexed policyId, uint64 indexed serviceId, bool allowed);
     event PolicyPaused(uint64 indexed policyId, bool paused);
     event Withdrawn(uint64 indexed policyId, uint256 amount, uint256 remaining);
 
@@ -87,7 +103,8 @@ contract SpendGuard {
         uint256 perCallCap,
         uint64 windowMs,
         uint32 maxCallsInWindow,
-        uint8 minTrustTier
+        uint8 minTrustTier,
+        bool restrictToAllowlist
     ) external returns (uint64 policyId) {
         // A policy that could accept deposits but never debit is a funds trap.
         //
@@ -100,6 +117,7 @@ contract SpendGuard {
         if (
             perCallCap == 0 || maxCallsInWindow == 0 || budget == 0
                 || perCallCap > budget || windowMs < 1000 || gate == address(0)
+                || minTrustTier > MAX_TRUST_TIER
         ) {
             revert InvalidConfig();
         }
@@ -115,6 +133,7 @@ contract SpendGuard {
             windowMs: windowMs,
             maxCallsInWindow: maxCallsInWindow,
             minTrustTier: minTrustTier,
+            restrictToAllowlist: restrictToAllowlist,
             paused: false,
             createdAt: _nowMs()
         });
@@ -164,10 +183,18 @@ contract SpendGuard {
         // check unreachable and the firewall's trust rule decorative.
         if (_tierOf(serviceId) < p.minTrustTier) revert UntrustedService();
 
-        // Bind the money to the service it is charged against. Without this a
-        // gate could debit under one service's id and pay an unrelated address,
-        // making the serviceId in DebitApproved decorative.
-        if (payTo != REGISTRY.paymentTargetOf(serviceId)) revert WrongPayee();
+        // The gate must not be able to pick its own counterparty. Registration
+        // is permissionless, so it can mint a service whose paymentTarget is
+        // its own address and satisfy every other rule here.
+        if (p.restrictToAllowlist && !serviceAllowed[policyId][serviceId]) {
+            revert ServiceNotAllowed();
+        }
+
+        // Bind the money to the service it is charged against — both WHO is
+        // paid and HOW MUCH. perCallCap alone left the amount asserted by the
+        // gate, the exact party these rules constrain, so a service listing
+        // 0.001 OG could be charged the full cap.
+        _requireSettlementTerms(serviceId, payTo, amount);
 
         if (seenRefs[policyId][paymentRef]) revert DuplicateRef();
 
@@ -208,6 +235,17 @@ contract SpendGuard {
         emit DebitApproved(policyId, serviceId, amount, payTo, paymentRef, remaining);
     }
 
+    /// Payee and price must both match what the service registered. Kept in
+    /// its own frame: inlined, its two locals push `debit` over the stack limit.
+    function _requireSettlementTerms(uint64 serviceId, address payTo, uint256 amount)
+        internal
+        view
+    {
+        (address target, uint256 price) = REGISTRY.settlementTermsOf(serviceId);
+        if (payTo != target) revert WrongPayee();
+        if (amount != price) revert WrongAmount();
+    }
+
     /// Registry score -> trust tier. Mirrors packages/shared/src/trust.ts
     /// exactly (new = 0, reliable = 1, trusted = 2) using integer ratios, so
     /// on-chain enforcement and off-chain display can never disagree.
@@ -217,6 +255,17 @@ contract SpendGuard {
         if (total >= 25 && uint256(success) * 100 >= uint256(total) * 95) return 2;
         if (uint256(success) * 10 >= uint256(total) * 9) return 1;
         return 0;
+    }
+
+    /// @notice Allow (or revoke) one service for this policy. Owner only —
+    ///         the whole point is that the GATE cannot choose its own
+    ///         counterparties. No-op unless the policy was opened with
+    ///         `restrictToAllowlist`.
+    function setServiceAllowed(uint64 policyId, uint64 serviceId, bool allowed) external {
+        Policy storage p = _loadPolicy(policyId);
+        if (msg.sender != p.owner) revert NotAuthorized();
+        serviceAllowed[policyId][serviceId] = allowed;
+        emit ServiceAllowedChanged(policyId, serviceId, allowed);
     }
 
     /// @notice Withdraw unspent escrow back to the owner. Owner only. Works

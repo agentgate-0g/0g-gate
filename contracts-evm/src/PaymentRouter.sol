@@ -26,8 +26,8 @@ contract PaymentRouter {
         uint64 timestamp // unix MS
     );
 
-    /// keccak(serviceId, nonce, payer) => already paid? On-chain replay guard,
-    /// in addition to the gateway's own single-use invoice burn.
+    /// keccak(serviceId, nonce, payer, payTo) => amount settled (0 = never).
+    /// On-chain replay guard, plus the evidence AgentGateRegistry needs.
     ///
     /// The key includes the payer deliberately. Keyed on (serviceId, nonce)
     /// alone, ANY address could burn ANY invoice for 1 wei — front-run the
@@ -36,15 +36,22 @@ contract PaymentRouter {
     /// able to burn only their own slot. Two honest payers racing the same
     /// nonce is harmless: the gateway burns the invoice in its own store before
     /// it proxies, so only one of them is ever served.
-    mapping(bytes32 => bool) public seenNonce;
+    ///
+    /// The key carries `payTo` and the slot carries the AMOUNT because a
+    /// settlement is consumed as PROOF OF PAYMENT by AgentGateRegistry. A bare
+    /// "this nonce was used" bit proves only that someone moved wei somewhere:
+    /// one wei sent to your own address set it, and a fabricated score cost
+    /// nothing. Recording who was paid and how much lets the registry ask the
+    /// only question that matters — was MY payout address paid MY price.
+    mapping(bytes32 => uint256) public settledAmount;
 
-    /// @notice The `seenNonce` key for a (serviceId, nonce, payer) triple.
-    function nonceKey(uint64 serviceId, uint256 nonce, address payer)
+    /// @notice The `settledAmount` key for one settlement.
+    function settlementKey(uint64 serviceId, uint256 nonce, address payer, address payTo)
         public
         pure
         returns (bytes32)
     {
-        return keccak256(abi.encode(serviceId, nonce, payer));
+        return keccak256(abi.encode(serviceId, nonce, payer, payTo));
     }
 
     /// @notice Pay a service's 402 invoice. The whole `msg.value` is forwarded
@@ -54,13 +61,13 @@ contract PaymentRouter {
         if (msg.value == 0) revert ZeroAmount();
         if (payTo == address(0)) revert ZeroPayTo();
 
-        bytes32 key = nonceKey(serviceId, nonce, msg.sender);
-        if (seenNonce[key]) revert DuplicateNonce();
+        bytes32 key = settlementKey(serviceId, nonce, msg.sender, payTo);
+        if (settledAmount[key] != 0) revert DuplicateNonce();
 
         // Checks-effects-interactions: burn the nonce before the outbound call.
         // A failed transfer reverts the whole tx, which also rolls this back —
         // the nonce stays spendable, as test_pay_nonceStaysUnburned asserts.
-        seenNonce[key] = true;
+        settledAmount[key] = msg.value;
 
         (bool ok, ) = payTo.call{value: msg.value}("");
         if (!ok) revert TransferFailed();

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { createPublicClient, createWalletClient, http, toHex } from 'viem';
+import { createPublicClient, createWalletClient, encodeAbiParameters, http, keccak256, toHex } from 'viem';
 import { mnemonicToAccount } from 'viem/accounts';
 import { AgentGateError, type AgentGateConfig, type AnySigner } from '@agentgate/shared';
 import { Live0gClient } from '../src/live-0g';
@@ -454,10 +454,13 @@ describe('Live0gClient writes', () => {
     );
 
     const pub4 = createPublicClient({ chain: CHAIN, transport: http(RPC) });
-    const key = await pub4.readContract({
-      address: routerAddress, abi: PAYMENT_ROUTER_ABI, functionName: 'nonceKey',
-      args: [1n, 9911n, buyer.address],
-    });
+    // The registry dedups on (serviceId, nonce, payer) — the router's
+    // settlement key additionally carries payTo, so they are deliberately
+    // different keys serving different questions.
+    const key = keccak256(encodeAbiParameters(
+      [{ type: 'uint64' }, { type: 'uint256' }, { type: 'address' }],
+      [1n, 9911n, buyer.address],
+    ));
     // The settlement key IS the dedup key...
     await expect(pub4.readContract({
       address: registryAddress, abi: REGISTRY_ABI, functionName: 'seenPayments',
