@@ -335,6 +335,4 @@ None of the three is upgradable — there is no proxy, so a redeploy is a **new 
 
 ## About
 
-Built solo by [mdlog](https://github.com/mdlog).
-
 **License:** [MIT](LICENSE)

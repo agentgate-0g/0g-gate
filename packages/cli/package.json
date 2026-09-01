@@ -21,7 +21,6 @@
     "node": ">=22"
   },
   "license": "MIT",
-  "author": "mdlog",
   "homepage": "https://github.com/agentgate-0g/0g-gate#readme",
   "repository": {
     "type": "git",
