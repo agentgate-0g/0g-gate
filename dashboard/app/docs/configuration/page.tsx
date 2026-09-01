@@ -442,7 +442,7 @@ export default function ConfigurationPage() {
         rows={[
           [
             <M key="v">NEXT_PUBLIC_SITE_URL</M>,
-            <M key="d">https://agentgate.mdloglabs.org</M>,
+            <M key="d">https://agentgate-0g.mdloglabs.org</M>,
             'Build-time base URL for the canonical and Open Graph links the dashboard emits. Set it when self-hosting the dashboard under another domain.',
           ],
         ]}

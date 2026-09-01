@@ -49,7 +49,11 @@ export interface WrapServiceOpts {
   adminToken?: string;
   /** Runtime mode; in 'live' a non-localhost gateway must use https:// (token safety). */
   mode?: AgentGateMode;
-  /** 0G network name (live self-map signature). Defaults to '' (mock ignores it). */
+  /**
+   * Network name bound into the live self-map signature. Defaults to the
+   * chain client's own network, which is what the gateway rebuilds the
+   * challenge from — so omitting it is safe rather than silently unverifiable.
+   */
   network?: string;
   /** Timeout (ms) for the admin-mapping POST. Defaults to DEFAULT_WRAP_FETCH_TIMEOUT_MS. */
   timeoutMs?: number;
@@ -211,7 +215,7 @@ export async function wrapService(opts: WrapServiceOpts): Promise<WrapServiceRes
     if (useSelfMap) {
       const timestamp = Date.now();
       const message = buildSelfMapMessage({
-        network: opts.network ?? '',
+        network: opts.network ?? opts.chain.network,
         serviceId,
         upstreamUrl,
         timestamp,

@@ -1,5 +1,5 @@
 import type { AgentGateMode, AnySigner } from '@agentgate/shared';
-import { AgentGateError, buildSelfMapMessage } from '@agentgate/shared';
+import { AgentGateError, DEFAULT_ZG_NETWORK, buildSelfMapMessage } from '@agentgate/shared';
 import { signMessage } from './identity';
 import type { FetchLike } from './types';
 import { normalizeBaseUrl, requireHttpUrl, requireNonEmpty } from './validate';
@@ -19,7 +19,11 @@ export interface MapServiceOpts {
   adminToken?: string;
   /** Runtime mode; in 'live' a non-localhost gateway must use https:// (token safety). */
   mode?: AgentGateMode;
-  /** Network name bound into the self-map signature. */
+  /**
+   * Network name bound into the self-map signature. Unlike wrap there is no
+   * ChainClient here to read it from, so live mode falls back to the live 0G
+   * network rather than signing over '' — a challenge no gateway rebuilds.
+   */
   network?: string;
   timeoutMs?: number;
   fetchImpl?: FetchLike;
@@ -74,7 +78,7 @@ export async function mapService(opts: MapServiceOpts): Promise<MapServiceResult
   if (useSelfMap) {
     const timestamp = Date.now();
     const message = buildSelfMapMessage({
-      network: opts.network ?? '',
+      network: opts.network ?? (opts.mode === 'live' ? DEFAULT_ZG_NETWORK : ''),
       serviceId: opts.serviceId,
       upstreamUrl,
       timestamp,

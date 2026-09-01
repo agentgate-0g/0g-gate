@@ -137,7 +137,7 @@ The result JSON lands at **2:28**.
 
 ## Scene 7 · `2:32 – 2:45` · 13s · 28 words · 129 wpm
 
-**On screen:** the title card — three contract addresses, 463 tests, 77 Foundry tests, the repo
+**On screen:** the title card — three contract addresses, 475 tests, 77 Foundry tests, the repo
 and npm package.
 
 **Cue:** the video ends at 2:45,0. Finish speaking by 2:43 so the last card breathes.

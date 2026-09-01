@@ -13,7 +13,7 @@
 
 **[Dashboard](https://agentgate-0g.mdloglabs.org)** · **[Gateway](https://0g-gateway.mdloglabs.org)** · **[npm](https://www.npmjs.com/package/agentgate-0g)** · **[Docs](https://agentgate-0g.mdloglabs.org/docs)** · **[Explorer](https://chainscan-galileo.0g.ai)** · **[Faucet](https://faucet.0g.ai)**
 
-[![AgentGate dashboard — live catalog of on-chain registered services](docs/assets/dashboard.png)](https://agentgate.mdloglabs.org)
+[![AgentGate dashboard — live catalog of on-chain registered services](docs/assets/dashboard.png)](https://agentgate-0g.mdloglabs.org)
 
 </div>
 
@@ -65,7 +65,7 @@ Against the live 0G deployment ([addresses](#deployed-addresses)):
 
 ```bash
 npx agentgate-0g@latest list                # the on-chain service catalog, zero setup
-curl -sS https://0g-gateway.mdloglabs.org/svc/1    # a real HTTP 402 invoice from the live gateway
+curl -sS https://0g-gateway.mdloglabs.org/svc/3    # a real HTTP 402 invoice from the live gateway
 ```
 
 <details>
@@ -110,8 +110,12 @@ npx agentgate-0g wrap https://api.example.com/data --price 2.5 --name "My Data A
 
 ```bash
 export BUYER_SIGNER_KEY=0x…
-npx agentgate-0g buy 1 --max 5
+npx agentgate-0g buy 3 --max 5
 ```
+
+> Any id `list` shows as **ACTIVE** works. Ids 1 and 2 are the retired pair from before the
+> attestor topology was corrected — they are paused on-chain, so buying one fails fast with
+> `SERVICE_INACTIVE` before a single wei moves.
 
 > `--key` is accepted as a flag on both, but it carries the private key itself — it lands in shell history and `ps`. The env vars above are the documented path.
 
@@ -263,7 +267,7 @@ deploy/          pm2 ecosystem config + systemd unit for the hosted gateway
 | `npm run agentgate -- …` | the `agentgate` CLI |
 | `npm run agent -- --task "…"` | run the buyer agent once |
 | `npm run typecheck` | `tsc --noEmit` in every package + dashboard + root scripts/e2e |
-| `npm test` | vitest: all package units + the e2e loop (463 tests) |
+| `npm test` | vitest: all package units + the e2e loop (475 tests) |
 | `npm run build` | dashboard `next build` |
 
 Contract tests: `cd contracts-evm && forge test` — 77 tests across `AgentGateRegistry` (37), `SpendGuard` (28), `PaymentRouter` (9), `GasCoupling` (1) and `SybilReputation` (2). `contracts-evm/lib/` is gitignored and there are no submodules, so a fresh clone vendors forge-std once first: `forge install foundry-rs/forge-std@v1.16.2 --no-git --shallow`. CI does the same, pinned to the same tag.

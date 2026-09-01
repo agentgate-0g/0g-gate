@@ -171,7 +171,7 @@ Say "mock chain" out loud if you use it — do not let it read as on-chain.
 | Dashboard first paint | `npm start -w dashboard` | 13 s build | **1.6 s** | port + prod build (§3) |
 | MCP one-paste | README judges block | — | **8.0 s** | 8 s is `sleep 8` — dead air |
 | Live buy | `npx agentgate-0g buy 2` | — | ~block time | needs funded wallet (§4) |
-| Vitest summary | `npx vitest run` | — | **8.1 s** | 463 passed |
+| Vitest summary | `npx vitest run` | — | **8.1 s** | 475 passed |
 | Foundry summary | `forge test` | — | **~15 ms** | vendor forge-std first |
 
 > The MCP block's 8 s is a literal `sleep 8` holding stdin open. On camera either **cut the wait
@@ -193,7 +193,7 @@ All re-verified against `https://evmrpc-testnet.0g.ai` on 2026-08-31.
 | pay tx | `0x5a811b41…923f0bb` — status **1**, block 52462505 → PaymentRouter |
 | attest tx | `0x61828080…074f55` — status **1**, block 52462532 → Registry |
 | Wire scheme | `exact-settled` (NOT x402 `exact`) — visible in the 402 body |
-| Tests | **463** vitest passed, **77** Foundry passed |
+| Tests | **475** vitest passed, **77** Foundry passed |
 | npm | `agentgate-0g@1.0.4` |
 
 ---

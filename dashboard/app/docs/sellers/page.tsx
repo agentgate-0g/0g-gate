@@ -256,7 +256,7 @@ export default function Page() {
         code={[
           'service id:      5',
           'public endpoint: https://0g-gateway.mdloglabs.org/svc/5',
-          'dashboard:       https://agentgate.mdloglabs.org/services/5',
+          'dashboard:       https://agentgate-0g.mdloglabs.org/services/5',
           'register tx:     <txHash>',
         ].join('\n')}
       />

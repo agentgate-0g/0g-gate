@@ -16,6 +16,51 @@ export default function Page() {
         lede="Notable changes to AgentGate — the CLI, gateway, smart contracts and docs — newest first."
       />
 
+      <H2 id="2026-09-01-v105">2026-09-01 — v1.0.5: the dashboard link pointed at a different chain</H2>
+      <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-6 text-mut">
+        <li>
+          <strong className="text-white">
+            <M>wrap</M> sent every seller to the Casper app.
+          </strong>{' '}
+          <M>DEFAULT_DASHBOARD_URL</M> was <M>agentgate.mdloglabs.org</M> — no <M>0g-</M> — which
+          is the older Casper deployment, not this one. It is the only link the wrap flow prints,
+          and the failure was silent rather than loud: that host answers <M>200</M> for the same
+          numeric service ids in CSPR, so a seller who had just paid gas on 0G opened it and read
+          a confident, entirely unrelated page. The constant travels inside the npm tarball, so
+          the fix only reaches anyone through this release.
+        </li>
+        <li>
+          <strong className="text-white">This dashboard told crawlers it lived somewhere else.</strong>{' '}
+          <M>lib/seo.ts</M> fell back to the same Casper host, so every page here served{' '}
+          <M>&lt;link rel=&quot;canonical&quot;&gt;</M> and <M>og:url</M> pointing at the other
+          app. Five docs pages printed it in examples too.
+        </li>
+        <li>
+          <strong className="text-white">Library callers could burn gas and then be stuck.</strong>{' '}
+          <M>wrapService</M> and <M>mapService</M> defaulted the signed network name to{' '}
+          <M>&apos;&apos;</M>. The CLI always passed it, so only SDK users were exposed — but they
+          were exposed badly: <M>registerService</M> spends gas and cannot be undone, and only
+          then does the gateway reject the owner signature it can never rebuild, reporting{' '}
+          <M>not_service_owner</M> — a message pointing at key ownership, which is the wrong
+          diagnosis. <M>mapService</M>, the documented recovery, failed identically. Wrap now
+          derives the network from the chain client it already holds; map falls back to the live
+          network in live mode.
+        </li>
+        <li>
+          <strong className="text-white">The npm README demoed a paused service.</strong>{' '}
+          <M>buy 1</M> and <M>status 1</M> pointed at service 1, deactivated when the attestor
+          topology was corrected. A reader who funded a wallet from the faucet got{' '}
+          <M>SERVICE_INACTIVE</M> on the one command that shows the product working. The examples
+          now use an active id and say that any id <M>list</M> reports as ACTIVE will do.
+        </li>
+        <li>
+          <strong className="text-white">Guarded, not just fixed.</strong> Two tests now fail if a
+          Casper host reappears: one over the exported URL constants, one over every file{' '}
+          <M>files</M> actually ships. The second requires a URL scheme, so the JSDoc that warns
+          readers off the host is still allowed to name it.
+        </li>
+      </ul>
+
       <H2 id="2026-09-01-v104">2026-09-01 — v1.0.4: the audited set is the live one</H2>
       <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-6 text-mut">
         <li>

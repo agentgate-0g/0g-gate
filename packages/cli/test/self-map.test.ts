@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import {
+  DEFAULT_ZG_NETWORK,
   buildSelfMapMessage,
   type AnySigner,
   type ChainClient,
   type RegisterServiceInput,
 } from '@agentgate/shared';
 import { recoverSigner } from '@agentgate/chain';
-import { signMessage, wrapService } from '../src/index';
+import { mapService, signMessage, wrapService } from '../src/index';
 
 // Freshly generated at runtime (never a pasted hex literal) so no key-shaped
 // string lands in a tracked file for secret scanners to flag.
@@ -114,6 +115,73 @@ describe('wrapService self-map path (key signer)', () => {
     });
     const res = await recoverSigner(msg, body.signatureHex);
     expect(res.valid).toBe(true);
+    expect(res.address).toBe(account.address.toLowerCase());
+  });
+});
+
+// The network name is bound INTO the signed challenge, and the gateway rebuilds
+// that challenge from its own `chain.network`. A caller who omits it therefore
+// signs a message the gateway will never reconstruct — and the failure surfaces
+// as `not_service_owner`, which points at key ownership: exactly the wrong
+// diagnosis. The CLI always passes it, so only library callers hit this, and
+// they hit it AFTER registerService has already spent gas and cannot be undone.
+describe('self-map signatures default to the right network', () => {
+  it('wrapService derives the network from the chain when the caller omits it', async () => {
+    let body: { upstreamUrl: string; timestamp: number; signatureHex: string } | null = null;
+
+    await wrapService({
+      upstreamUrl: 'https://api.example.com/gold',
+      priceOg: '0.5',
+      name: 'Gold',
+      gateway: 'https://gw.example',
+      chain: fakeChain(), // network: '0g-galileo'
+      signer: { kind: 'key', privateKey },
+      mode: 'live',
+      // network deliberately NOT passed
+      fetchImpl: async (_url, init) => {
+        body = JSON.parse(String(init?.body));
+        return new Response(null, { status: 204 });
+      },
+    });
+
+    expect(body).not.toBeNull();
+    const signed = body!;
+    // Rebuild the challenge the GATEWAY would build, from its own chain network.
+    const msg = buildSelfMapMessage({
+      network: '0g-galileo',
+      serviceId: 1,
+      upstreamUrl: signed.upstreamUrl,
+      timestamp: signed.timestamp,
+    });
+    const res = await recoverSigner(msg, signed.signatureHex);
+    expect(res.address).toBe(account.address.toLowerCase());
+  });
+
+  it('mapService signs over the live network when the caller omits it', async () => {
+    let body: { upstreamUrl: string; timestamp: number; signatureHex: string } | null = null;
+
+    await mapService({
+      serviceId: 3,
+      upstreamUrl: 'https://api.example.com/gold',
+      gateway: 'https://gw.example',
+      signer: { kind: 'key', privateKey },
+      mode: 'live',
+      // network deliberately NOT passed
+      fetchImpl: async (_url, init) => {
+        body = JSON.parse(String(init?.body));
+        return new Response(null, { status: 204 });
+      },
+    });
+
+    expect(body).not.toBeNull();
+    const signed = body!;
+    const msg = buildSelfMapMessage({
+      network: DEFAULT_ZG_NETWORK,
+      serviceId: 3,
+      upstreamUrl: signed.upstreamUrl,
+      timestamp: signed.timestamp,
+    });
+    const res = await recoverSigner(msg, signed.signatureHex);
     expect(res.address).toBe(account.address.toLowerCase());
   });
 });

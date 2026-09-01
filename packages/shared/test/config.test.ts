@@ -4,6 +4,8 @@ import {
   DEFAULT_ADMIN_TOKEN,
   DEFAULT_ZG_CHAIN_ID,
   DEFAULT_ZG_EXPLORER_URL,
+  DEFAULT_DASHBOARD_URL,
+  DEFAULT_GATEWAY_URL,
   DEFAULT_ZG_NETWORK,
   DEFAULT_PAYMENT_ROUTER_ADDRESS,
   DEFAULT_REGISTRY_ADDRESS,
@@ -230,5 +232,32 @@ describe('activity lookback window', () => {
   it('is still overridable', () => {
     const cfg = loadConfig({ AGENTGATE_MODE: 'mock', ACTIVITY_LOOKBACK_BLOCKS: '250' });
     expect(cfg.activityLookbackBlocks).toBe(250);
+  });
+});
+
+describe('hosted default URLs point at the 0G deployment', () => {
+  // `agentgate.mdloglabs.org` (no `0g-`) and `gateway.mdloglabs.org` are the
+  // OLDER CASPER deployment, still running alongside this one. They answer 200
+  // for the same numeric service ids in CSPR, so a wrong constant here does not
+  // 404 — it renders a confident, entirely unrelated page. That silence is why
+  // this is asserted rather than left to review.
+  const CASPER_HOSTS = [/(^|\/\/)agentgate\.mdloglabs\.org/, /(^|\/\/)gateway\.mdloglabs\.org/];
+
+  it('links the dashboard to the 0G host, not the Casper one', () => {
+    expect(DEFAULT_DASHBOARD_URL).toBe('https://agentgate-0g.mdloglabs.org');
+  });
+
+  it('keeps every exported default URL off the Casper hosts', () => {
+    const urls = {
+      DEFAULT_ZG_RPC_URL,
+      DEFAULT_ZG_EXPLORER_URL,
+      DEFAULT_GATEWAY_URL,
+      DEFAULT_DASHBOARD_URL,
+    };
+    for (const [name, url] of Object.entries(urls)) {
+      for (const host of CASPER_HOSTS) {
+        expect(`${name}=${url}`).not.toMatch(host);
+      }
+    }
   });
 });

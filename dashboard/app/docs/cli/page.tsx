@@ -146,7 +146,7 @@ export default function Page() {
                 Feeds the dashboard detail link printed by <M>wrap</M> in <M>mock</M> mode
                 (<M>http://localhost:&lt;DASHBOARD_PORT&gt;/services/&lt;id&gt;</M>); <M>live</M>{' '}
                 mode links to the hosted{' '}
-                <M>https://agentgate.mdloglabs.org/services/&lt;id&gt;</M>.
+                <M>https://agentgate-0g.mdloglabs.org/services/&lt;id&gt;</M>.
               </>
             ),
           },
@@ -290,7 +290,7 @@ export default function Page() {
         code={[
           'service id:      5',
           'public endpoint: https://0g-gateway.mdloglabs.org/svc/5',
-          'dashboard:       https://agentgate.mdloglabs.org/services/5',
+          'dashboard:       https://agentgate-0g.mdloglabs.org/services/5',
           'register tx:     0x<txHash>',
           'explorer:        https://chainscan-galileo.0g.ai/tx/0x<txHash>',
         ].join('\n')}

@@ -147,3 +147,47 @@ describe('the library surface is usable, not merely present', () => {
     expect(typeof sdk.DEFAULT_MAP_FETCH_TIMEOUT_MS).toBe('number');
   });
 });
+
+describe('nothing shipped points at the Casper deployment', () => {
+  // `agentgate.mdloglabs.org` and `gateway.mdloglabs.org` — neither carrying the
+  // `0g-` prefix — are the older Casper app, still running. It answers 200 for
+  // the same numeric service ids in CSPR, so a wrong host does not 404: it
+  // renders a confident, unrelated page. The constant travels INSIDE the tarball,
+  // so a fix that is not published does not reach anyone; this guards the seam
+  // where that constant becomes bytes on npm.
+  //
+  // A SCHEME is required. The defect is always a resolvable URL — a constant, a
+  // link, a printed line. Naming the bare host in prose is the opposite: that is
+  // DEFAULT_GATEWAY_URL's JSDoc warning readers off it, and it rides along into
+  // dist/index.d.ts. Matching prose too would force the warning to be deleted to
+  // make the guard pass, which is exactly backwards.
+  const CASPER = /https?:\/\/(?:agentgate|gateway)\.mdloglabs\.org/;
+
+  /** Files npm really ships, resolved from `files` — dist only once built. */
+  function shippedFiles(): string[] {
+    const { readdirSync, existsSync, statSync } = require('node:fs') as typeof import('node:fs');
+    const root = fileURLToPath(new URL('../', import.meta.url));
+    const out: string[] = [];
+    for (const entry of pkg.files) {
+      const p = `${root}${entry}`;
+      if (!existsSync(p)) continue;
+      if (statSync(p).isDirectory()) {
+        for (const f of readdirSync(p)) out.push(`${entry}/${f}`);
+      } else {
+        out.push(entry);
+      }
+    }
+    return out;
+  }
+
+  it('ships at least the README, so this guard is never vacuous', () => {
+    expect(shippedFiles()).toContain('README.md');
+  });
+
+  it.each(shippedFiles())('%s names no Casper host', (rel) => {
+    const root = fileURLToPath(new URL('../', import.meta.url));
+    const body = readFileSync(`${root}${rel}`, 'utf8');
+    const hit = body.split('\n').find((l) => CASPER.test(l));
+    expect(hit ?? '').toBe('');
+  });
+});

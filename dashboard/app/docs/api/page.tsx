@@ -680,7 +680,7 @@ export default function Page() {
       <H2 id="dashboard">Part 2 — Dashboard read API</H2>
       <P>
         The dashboard&apos;s own read-only routes under <M>dashboard/app/api/*</M>. The hosted
-        instance serves them at <M>https://agentgate.mdloglabs.org/api/*</M>;{' '}
+        instance serves them at <M>https://agentgate-0g.mdloglabs.org/api/*</M>;{' '}
         <M>localhost:3000</M> is the repo default. They run on the Node.js runtime, are
         force-dynamic and never cached, and read the chain through one
         server-side client (the browser never talks to the chain directly). On a chain outage every

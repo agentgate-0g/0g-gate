@@ -22,8 +22,8 @@ export const DEFAULT_ADMIN_TOKEN = 'dev-admin-token';
 // boolean` as the decoder walks the wrong offsets. Code and contracts move
 // together or not at all.
 //
-// The published npm package still carries the previous addresses, so the
-// zero-config `npx agentgate-0g list` path is unaffected until a release.
+// Shipped to npm in 1.0.4, so the zero-config `npx agentgate-0g list` path
+// reads this set too.
 export const DEFAULT_REGISTRY_ADDRESS = '0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1';
 export const DEFAULT_PAYMENT_ROUTER_ADDRESS = '0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F';
 export const DEFAULT_SPEND_GUARD_ADDRESS = '0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781';
@@ -64,8 +64,15 @@ export const DEFAULT_GATEWAY_URL = 'https://0g-gateway.mdloglabs.org';
 /**
  * Default hosted dashboard the CLI links to in live mode when printing the
  * service detail URL; mock mode links to http://localhost:<DASHBOARD_PORT>.
+ *
+ * `agentgate.mdloglabs.org` — no `0g-` — is the older CASPER deployment and is
+ * deliberately NOT this value, the same trap DEFAULT_GATEWAY_URL warns about.
+ * It is worse here than a dead link would be: that host serves the same numeric
+ * service ids in CSPR and answers 200, so a seller who just registered on 0G
+ * follows this link and reads a confident, entirely unrelated page with nothing
+ * to signal the mistake. Asserted in packages/shared/test/config.test.ts.
  */
-export const DEFAULT_DASHBOARD_URL = 'https://agentgate.mdloglabs.org';
+export const DEFAULT_DASHBOARD_URL = 'https://agentgate-0g.mdloglabs.org';
 
 export interface AgentGateConfig {
   mode: AgentGateMode;

@@ -54,7 +54,7 @@ npx vitest run 2>&1 | tail -3
 ```
 
 Last verified 2026-08-31: npm `1.0.3`, gateway `402`, CI green on `5d97595`,
-`463` vitest, `77` forge. Field 1 quotes exactly those.
+`475` vitest, `77` forge. Field 1 quotes exactly those.
 
 Re-measure a field's length after editing it:
 

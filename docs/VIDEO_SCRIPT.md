@@ -224,13 +224,13 @@ Then the tool call result (verified, **8.0 s** — trim the `sleep` in the edit,
 ## Scene 6 — Honest close · `2:32 – 2:45`
 
 **🖥️ LAYAR** — Title card. Three contract addresses, the repo URL, the npm package. Optionally a
-half-second flash of `463 passed` and `77 tests passed`.
+half-second flash of `475 passed` and `77 tests passed`.
 
 ```
 AgentGateRegistry  0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1
 PaymentRouter      0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F
 SpendGuard         0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781
-0G Galileo Testnet · chain 16602 · 463 tests · 77 Foundry tests
+0G Galileo Testnet · chain 16602 · 475 tests · 77 Foundry tests
 github.com/agentgate-0g/0g-gate  ·  npm: agentgate-0g
 ```
 

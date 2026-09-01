@@ -12,7 +12,7 @@ The read commands run against 0G Galileo Testnet with **no configuration, no key
 
 ```bash
 npx agentgate-0g list        # on-chain service catalog with scores + trust tiers
-npx agentgate-0g status 1    # one service: record, price, trust, attestations
+npx agentgate-0g status 3    # one service: record, price, trust, attestations
 ```
 
 ## Wrap your API (writes)
@@ -32,8 +32,11 @@ It signs the on-chain registration with that key, then maps your upstream on the
 
 ```bash
 export BUYER_SIGNER_KEY=0x…
-npx agentgate-0g buy 1 --max 5
+npx agentgate-0g buy 3 --max 5
 ```
+
+> Any id `list` reports as **ACTIVE** works here. Paused services fail fast with
+> `SERVICE_INACTIVE` before any payment, so a stale id costs nothing but a retry.
 
 `--max` is a budget cap: any invoice priced above it is refused (`PRICE_EXCEEDED`) before a single wei moves. Unknown or paused services fail fast before any payment.
 
