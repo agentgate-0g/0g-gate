@@ -95,13 +95,13 @@
 
 <div id="card"><div id="cardin">
   <div id="cardh">Stripe for AI agents<br>on <span>0G.</span></div>
-  <div id="cardsub">Live on 0G Galileo Testnet — contracts, gateway, CLI and SDK.</div>
+  <div id="cardsub">Live on 0G Galileo Testnet — contracts, gateway, dashboard, CLI and SDK.</div>
   <div style="margin-top:32px">
-    <div class="addr"><b>AgentGateRegistry</b><code>0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA</code></div>
-    <div class="addr"><b>PaymentRouter</b><code>0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB</code></div>
-    <div class="addr"><b>SpendGuard</b><code>0x08b4049802999245888E72D0C31Fb4cA55C30E1B</code></div>
+    <div class="addr"><b>AgentGateRegistry</b><code>0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1</code></div>
+    <div class="addr"><b>PaymentRouter</b><code>0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F</code></div>
+    <div class="addr"><b>SpendGuard</b><code>0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781</code></div>
   </div>
-  <div id="cardfoot">460 tests · 42 Foundry tests · <em>npx agentgate-0g list</em> — no key required<br>
+  <div id="cardfoot">463 tests · 77 Foundry tests · <em>npx agentgate-0g list</em> — no key required<br>
     <span style="color:#6e7781;font-size:19px">github.com/agentgate-0g/0g-gate · npm: agentgate-0g</span></div>
 </div></div>
 
@@ -187,16 +187,16 @@ const SCENES = [
               'Agents discover it, pay per call, and leave a receipt on 0G. No cards, no accounts, no API keys.', t); } },
 
   { id:'S1', tag:'02 · <em>Zero setup</em>', dur:22, run:t=>{
-      termScene({path:'/tmp — no clone, no config, no key', top:300, h:260, fs:26,
+      termScene({path:'/tmp — no clone, no config, no key', top:270, h:340, fs:26,
                  cmd:'npx agentgate-0g@latest list', out:D.list, typeEnd:.22, outEnd:.52}, t);
       caption('The live on-chain catalog, from an empty directory.',
               'Every read is a public-RPC view call straight to the registry contract. No indexer anywhere in the path.', t); } },
 
   { id:'S2', tag:'03 · <em>A real 402</em>', dur:25, run:t=>{
       termScene({path:'the live gateway on 0G Galileo', top:126, h:766, fs:21,
-                 cmd:'curl -i https://0g-gateway.mdloglabs.org/svc/1',
+                 cmd:'curl -i https://0g-gateway.mdloglabs.org/svc/3',
                  out:D.hdr402.concat(['']).concat(D.body402), typeEnd:.13, outEnd:.60,
-                 cmd2:'curl -s .../svc/1 | jq .accepts[0].extra.nonce',
+                 cmd2:'curl -s .../svc/3 | jq .accepts[0].extra.nonce',
                  out2:['"'+D.nonceB+'"   ← different. single-use, burned on-chain.']}, t);
       caption('A real HTTP 402, priced from the contract’s own on-chain list.',
               'Scheme <span style="color:#ff6b4a">exact-settled</span>, not x402 <span style="color:#ff6b4a">exact</span> — 0G has no facilitator, so the buyer settles first and shows the tx hash.', t); } },
@@ -221,7 +221,7 @@ const SCENES = [
 
   { id:'S6', tag:'07 · <em>Live today</em>', dur:13, run:t=>{
       showOnly('#card');
-      caption('Contracts, gateway, CLI and SDK are live on 0G Galileo.',
+      caption('Contracts, gateway, dashboard, CLI and SDK are live on 0G Galileo.',
               'Contracts, gateway, dashboard, CLI and SDK — every surface is hosted and live.', t); } },
 ];
 
