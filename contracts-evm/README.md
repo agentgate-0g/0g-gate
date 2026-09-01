@@ -53,6 +53,23 @@ Closes three rounds of audit findings. Note the operational consequence: a
 service's attestor may no longer be its owner or its payout address, so seeding
 this registry needs three distinct addresses per service, not one.
 
+**Seeded 2026-09-01.** Two services registered and each taken through a real
+paid call — buyer pays the listed 0.001 OG to the registered payout, the
+third-party attestor scores it — so both read 1/1 and the activity ledger holds
+six on-chain events. Roles are separate by necessity, not preference:
+
+| Role | Address |
+|---|---|
+| owner | `0x71a89a7e692dAC4d6BD7c3f1cCa9155592d87BaE` (the gate signer) |
+| payout | `0xb5B4A886DA386830392a86288ed91d272dE17746` |
+| attestor | `0xC58C74Ae050dF70F4D11d705b65c297d373Fb004` |
+| buyer | `0x69EcD4f412a130C0cD78BFE1fcDb8BF08F407bd3` |
+
+The three new keys are mode-600 files in `~/.agentgate-{payout,attestor,buyer}.key`
+and are NOT in the repo. `/svc/1` and `/svc/2` do not serve yet — the hosted
+gateway still runs the previous code and knows nothing of these ids; that is the
+cutover, and it is still pending.
+
 ### Original set — still live, still what everything uses
 
 | Contract | Address | Explorer |
