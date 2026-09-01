@@ -14,6 +14,12 @@ coverage/
 *.pem
 *_secret_key.pem
 keys/
+# Registry credentials — an .npmrc carries a plaintext _authToken.
+# Two npm accounts are in play on this machine, so a per-project .npmrc
+# is a reasonable thing to create; it must never be committed.
+.npmrc
+.npmrc.*
+!.npmrc.example
 
 # Internal planning docs — kept local, not published
 /AgentGate-PRD-Solo-Build-Plan.md
