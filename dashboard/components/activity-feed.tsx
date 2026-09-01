@@ -256,6 +256,7 @@ export function ActivityFeed() {
   }
 
   const events = data.events;
+  const lookbackBlocks = data.lookbackBlocks;
   const counts: Record<Kind | 'all', number> = {
     all: events.length,
     payment: events.filter((e) => e.kind === 'payment').length,
@@ -285,13 +286,17 @@ export function ActivityFeed() {
 
       {events.length === 0 ? (
         <div className="panel px-6 py-14 text-center">
-          <p className="microlabel">no activity yet</p>
+          <p className="microlabel">nothing in this window</p>
           <p className="mx-auto mt-3 max-w-md font-display text-lg text-white">
-            The first registration, payment or attestation will stream in here.
+            No registration, payment or attestation in the last{' '}
+            {lookbackBlocks ? formatInt(lookbackBlocks) : '—'} blocks.
           </p>
           <p className="mt-3 text-sm text-mut">
-            Run <code className="font-mono text-zinc-300">npm run demo</code> to fire a full
-            wrap → 402 → pay → attest loop.
+            This feed reads a bounded log window, so older history scrolls out of it —
+            an empty table here does not mean the service was never used. Raise{' '}
+            <code className="font-mono text-zinc-300">ACTIVITY_LOOKBACK_BLOCKS</code> to look
+            further back, or run <code className="font-mono text-zinc-300">npm run demo</code>{' '}
+            to fire a full wrap → 402 → pay → attest loop.
           </p>
         </div>
       ) : (

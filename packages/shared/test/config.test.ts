@@ -211,4 +211,24 @@ describe('paymentRouterAddress', () => {
       loadConfig({ AGENTGATE_MODE: 'mock', PAYMENT_ROUTER_ADDRESS: addr }).paymentRouterAddress,
     ).toBe(addr);
   });
+
+});
+
+describe('activity lookback window', () => {
+  it('reaches days of history, not hours, at 0G block times', () => {
+    // 0G Galileo produces a block every ~0.5s (measured over 10,000 blocks).
+    // The old 50,000-block default was therefore under SEVEN HOURS of history:
+    // a service busy yesterday rendered an empty ledger today, and the UI could
+    // not tell "nothing happened" from "it scrolled out of the window".
+    // The public RPC serves a 1,000,000-block getLogs in the same ~0.8s it
+    // serves 10,000, so the window costs nothing to widen.
+    const cfg = loadConfig({ AGENTGATE_MODE: 'mock' });
+    const hours = (cfg.activityLookbackBlocks * 0.5) / 3600;
+    expect(hours).toBeGreaterThan(24 * 5);
+  });
+
+  it('is still overridable', () => {
+    const cfg = loadConfig({ AGENTGATE_MODE: 'mock', ACTIVITY_LOOKBACK_BLOCKS: '250' });
+    expect(cfg.activityLookbackBlocks).toBe(250);
+  });
 });

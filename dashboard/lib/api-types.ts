@@ -40,6 +40,12 @@ export interface ActivityResponse {
   events: ActivityEvent[];
   /** True when served from the server cache because a live refresh failed (e.g. an RPC outage). */
   stale?: boolean;
+  /**
+   * How many blocks back the feed searched. An empty list means "nothing in
+   * this window", NOT "nothing ever happened" — the UI has to say which, or a
+   * service whose history simply aged out reads as a service nobody ever used.
+   */
+  lookbackBlocks?: number;
 }
 
 export interface StatsResponse {

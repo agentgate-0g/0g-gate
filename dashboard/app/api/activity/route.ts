@@ -27,9 +27,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json(hit.body, { headers: { 'x-cache': 'hit' } });
   }
   try {
-    const { chain } = getChain();
+    const { chain, config } = getChain();
     const events = await chain.listRecentActivity(limit);
-    const body: ActivityResponse = { network: chain.network, events };
+    const body: ActivityResponse = {
+      network: chain.network,
+      events,
+      lookbackBlocks: config.activityLookbackBlocks,
+    };
     cache.set(limit, { at: now, body });
     return NextResponse.json(body, { headers: { 'x-cache': 'miss' } });
   } catch (err) {

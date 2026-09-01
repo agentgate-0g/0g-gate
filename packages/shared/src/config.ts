@@ -223,7 +223,13 @@ export function loadConfig(
     mode === 'mock' ? MOCK_PAYMENT_ROUTER_ADDRESS : DEFAULT_PAYMENT_ROUTER_ADDRESS,
   );
   const spendGuardAddress = readStr(env, 'SPEND_GUARD_ADDRESS', DEFAULT_SPEND_GUARD_ADDRESS);
-  const activityLookbackBlocks = readInt(env, 'ACTIVITY_LOOKBACK_BLOCKS', 50_000, 1, Number.MAX_SAFE_INTEGER);
+  // 1,000,000 blocks, not 50,000. 0G Galileo produces a block every ~0.5s, so
+  // the old default was under SEVEN HOURS of history — a service busy yesterday
+  // showed an empty activity ledger today, and nothing in the UI distinguished
+  // "nothing happened" from "it aged out of the window". The public RPC returns
+  // a 1,000,000-block eth_getLogs in the same ~0.8s it returns 10,000 (measured
+  // against evmrpc-testnet.0g.ai), so the wider window is free. ~6 days here.
+  const activityLookbackBlocks = readInt(env, 'ACTIVITY_LOOKBACK_BLOCKS', 1_000_000, 1, Number.MAX_SAFE_INTEGER);
   const gateSignerKey = readPrivateKey(env, 'GATE_SIGNER_KEY');
   const buyerSignerKey = readPrivateKey(env, 'BUYER_SIGNER_KEY');
   const sellerSignerKey = readPrivateKey(env, 'SELLER_SIGNER_KEY');
