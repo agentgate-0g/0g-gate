@@ -55,7 +55,7 @@ contract GasCouplingTest is Test {
         guard.deposit{value: 5 ether}(pid);
         vm.prank(gate);
         uint256 before = gasleft();
-        guard.debit(pid, svc, 1e15, payTo, keccak256(abi.encode(svc)));
+        guard.debit(pid, svc, 1e15, payTo, uint256(svc));
         return before - gasleft();
     }
 

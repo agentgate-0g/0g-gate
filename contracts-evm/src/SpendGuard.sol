@@ -2,6 +2,7 @@
 pragma solidity 0.8.28;
 
 import {AgentGateRegistry} from "./AgentGateRegistry.sol";
+import {PaymentRouter} from "./PaymentRouter.sol";
 
 /// @title SpendGuard — on-chain x402 spend-firewall escrow
 /// @notice EVM port of contracts/spend-guard. An agent opens a Policy and
@@ -91,7 +92,10 @@ contract SpendGuard {
     uint64 public policiesCount;
 
     mapping(uint64 => Policy) private _policies;
-    /// policyId => paymentRef => already debited? Replay guard.
+    /// policyId => keccak(serviceId, nonce) => already debited? Replay guard.
+    /// Keyed WITH the serviceId: nonces are unique per service, so a bare nonce
+    /// would collide across services inside one policy and block a legitimate
+    /// call the first time two sellers happened to issue the same number.
     mapping(uint64 => mapping(bytes32 => bool)) public seenRefs;
     /// policyId => approved-debit timestamps (ms) inside the live rate window.
     mapping(uint64 => uint64[]) private _callTimes;
@@ -163,7 +167,7 @@ contract SpendGuard {
         uint64 serviceId,
         uint256 amount,
         address payTo,
-        bytes32 paymentRef
+        uint256 nonce
     ) external {
         Policy storage p = _loadPolicy(policyId);
 
@@ -196,7 +200,8 @@ contract SpendGuard {
         // 0.001 OG could be charged the full cap.
         _requireSettlementTerms(serviceId, payTo, amount);
 
-        if (seenRefs[policyId][paymentRef]) revert DuplicateRef();
+        bytes32 ref = keccak256(abi.encode(serviceId, nonce));
+        if (seenRefs[policyId][ref]) revert DuplicateRef();
 
         // Budget: must fit BOTH the escrow and the cumulative cap.
         uint256 newSpent = p.spent + amount;
@@ -222,17 +227,25 @@ contract SpendGuard {
         uint256 remaining = p.balance - amount;
         p.balance = remaining;
         p.spent = newSpent;
-        seenRefs[policyId][paymentRef] = true;
+        seenRefs[policyId][ref] = true;
 
         // Rewrite the pruned window plus this call.
         while (times.length > keptLen) times.pop();
         for (uint256 i = 0; i < keptLen; i++) times[i] = kept[i];
         times.push(nowMs);
 
-        (bool ok, ) = payTo.call{value: amount}("");
-        if (!ok) revert TransferFailed();
+        // Settle THROUGH the router, not directly. A direct transfer paid the
+        // seller but produced no settlement, so recordAttestation reverted
+        // NoSuchPayment for every escrow-paid call: a service used only through
+        // a spend policy could never earn reputation, and was therefore locked
+        // out of the very policies paying it. Routing it makes both settlement
+        // paths mint the same attestable evidence, with this contract as the
+        // payer of record. The router forwards the value straight on and
+        // custodies nothing; its own revert propagates rather than being
+        // flattened into TransferFailed.
+        REGISTRY.ROUTER().pay{value: amount}(serviceId, nonce, payTo);
 
-        emit DebitApproved(policyId, serviceId, amount, payTo, paymentRef, remaining);
+        emit DebitApproved(policyId, serviceId, amount, payTo, ref, remaining);
     }
 
     /// Payee and price must both match what the service registered. Kept in

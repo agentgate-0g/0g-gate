@@ -939,9 +939,9 @@ export const SPEND_GUARD_ABI = [
         "internalType": "address"
       },
       {
-        "name": "paymentRef",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        "name": "nonce",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [],
