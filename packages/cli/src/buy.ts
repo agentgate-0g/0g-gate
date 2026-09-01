@@ -94,10 +94,16 @@ export async function buyService(opts: BuyServiceOpts): Promise<BuyServiceResult
       ? `${stripTrailingSlashes(opts.gateway)}/svc/${id}`
       : service.endpointUrl;
 
+  // The cap is the price the CHAIN lists, never the optional --max. --max is a
+  // budget ceiling the caller may omit; on its own it guards nothing, and even
+  // when supplied it permits any overcharge up to itself. The registry price is
+  // the only number the seller cannot restate at invoice time.
   const client = createAgentGateClient({
     chain,
     signer,
-    ...(maxPriceWei !== undefined ? { maxPriceWei } : {}),
+    maxPriceWei: service.priceWei,
+    expectPayTo: service.paymentTarget,
+    expectServiceId: id,
     ...(opts.settleDelayMs !== undefined ? { settleDelayMs: opts.settleDelayMs } : {}),
     ...(opts.fetchImpl !== undefined ? { fetchImpl: opts.fetchImpl } : {}),
     ...(opts.requestTimeoutMs !== undefined ? { requestTimeoutMs: opts.requestTimeoutMs } : {}),

@@ -290,3 +290,84 @@ describe('buyService', () => {
     expect(chain.transfers).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The invoice is seller-controlled. The on-chain record is not.
+//
+// Registration is permissionless and the endpoint is a free string, so a
+// service can list 0.001 OG in the catalogue and serve a 402 demanding the
+// buyer's whole balance to an address of its choosing. `--max` is a ceiling the
+// caller may omit entirely, so on its own it guards nothing. Every assertion
+// below therefore checks that NO transfer happened — reaching chain.transfer at
+// all means the money is already gone.
+// ---------------------------------------------------------------------------
+
+/** A tampered 402 first, then a normal paid response once proof arrives. */
+function hostileFetch(over: Record<string, unknown>): {
+  impl: typeof fetch;
+  calls: FetchCall[];
+} {
+  const calls: FetchCall[] = [];
+  const impl = (async (url: unknown, init?: RequestInit) => {
+    calls.push({ url: String(url), init });
+    const hasProof = new Headers(init?.headers).has('X-PAYMENT');
+    return hasProof ? Response.json({ rate: 1 }) : invoice402(over);
+  }) as typeof fetch;
+  return { impl, calls };
+}
+
+describe('buyService refuses an invoice that disagrees with the chain', () => {
+  it('will not overpay the listed price when --max is omitted', async () => {
+    const chain = makeFakeChain(makeService(1)); // listed at 0.5 OG
+    const { impl } = hostileFetch({ maxAmountRequired: '900000000000000000000' }); // 900 OG
+
+    await expect(
+      buyService({ ...baseOpts(chain, impl) }), // deliberately no maxOg
+    ).rejects.toMatchObject({ code: 'PRICE_EXCEEDED' });
+
+    expect(chain.transfers).toHaveLength(0);
+  });
+
+  it('will not pay an invoice that redirects payTo away from the registered payout', async () => {
+    const chain = makeFakeChain(makeService(1));
+    const { impl } = hostileFetch({ payTo: `0x${HEX40('e')}` });
+
+    await expect(buyService({ ...baseOpts(chain, impl) })).rejects.toMatchObject({
+      code: 'INVOICE_MISMATCH',
+    });
+
+    expect(chain.transfers).toHaveLength(0);
+  });
+
+  it('will not pay an invoice billed against a different service id', async () => {
+    const chain = makeFakeChain(makeService(1));
+    const { impl } = hostileFetch({
+      extra: {
+        nonce: NONCE,
+        serviceId: 999,
+        expiresAtMs: Date.now() + 300_000,
+        settlement: '0g-payment-router',
+        router: ROUTER,
+        nonceEncoding: 'uint256-decimal',
+      },
+    });
+
+    await expect(buyService({ ...baseOpts(chain, impl) })).rejects.toMatchObject({
+      code: 'INVOICE_MISMATCH',
+    });
+
+    expect(chain.transfers).toHaveLength(0);
+  });
+
+  it('still pays the honest invoice when every field agrees', async () => {
+    const chain = makeFakeChain(makeService(1));
+    const { impl } = gatewayFetch(() => Response.json({ rate: 16250 }));
+
+    const { result } = await buyService({ ...baseOpts(chain, impl) });
+
+    expect(result.paid).toBe(true);
+    expect(result.txHash).toBe(PAYMENT_TX);
+    expect(chain.transfers).toHaveLength(1);
+    expect(chain.transfers[0]!.input.to).toBe(PAY_TO);
+  });
+});

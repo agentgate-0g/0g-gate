@@ -177,6 +177,25 @@ export function createApp(deps: MiddlewareDeps): Express {
       500,
     );
   }
+  // Fail closed: a live gateway must not hold invoices only in memory.
+  // PaymentRouter.pay forwards msg.value to the seller inside the same
+  // transaction — no escrow, and no refund function exists in any of the three
+  // contracts — so an invoice lost to a restart is a buyer who paid and can
+  // never be served. FileInvoiceStore exists for this, but it is opt-in, and an
+  // opt-in safety default is the one that is missing when it matters. An
+  // injected store is accepted: the caller has taken ownership of durability.
+  if (
+    config.mode === 'live' &&
+    deps.invoiceStore === undefined &&
+    (deps.invoiceStorePath === undefined || deps.invoiceStorePath.trim() === '')
+  ) {
+    throw new AgentGateError(
+      'CONFIG_INVALID',
+      'live mode requires INVOICE_STORE_PATH — an in-memory invoice store loses every ' +
+        'in-flight payment on restart, and those payments cannot be refunded',
+      500,
+    );
+  }
   const logger = deps.logger ?? createLogger('middleware');
   // Persistent when a path is configured (F2), else in-memory. Either way, a
   // store the gateway constructs itself is closed on dispose; an injected one is not.

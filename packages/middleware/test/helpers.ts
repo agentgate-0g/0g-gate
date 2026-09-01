@@ -83,6 +83,12 @@ export async function bootGateway(
     logger: silentLogger,
     upstreamsFile,
   };
+  // createApp fails closed on a live gateway with a memory-backed invoice store,
+  // so a live fixture has to bring one. Parked beside upstreams.json in the same
+  // per-test temp dir, which the OS reclaims.
+  if (config.mode === 'live') {
+    startOpts.invoiceStorePath = path.join(path.dirname(upstreamsFile), 'invoices.json');
+  }
   if (opts.attestationRetryDelayMs !== undefined) {
     startOpts.attestationRetryDelayMs = opts.attestationRetryDelayMs;
   }

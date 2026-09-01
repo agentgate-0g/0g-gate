@@ -174,13 +174,13 @@ export function buildAgentGateMcpServer(deps: McpServerDeps): McpServer {
     {
       title: 'Buy one call to a service (pays native OG)',
       description:
-        'Autonomously pay a service’s 402 invoice by calling PaymentRouter.pay(serviceId, nonce, payTo) on 0G Galileo, which binds the invoice nonce to the payment on-chain, then return the response body. Spends real OG from the configured buyer key, capped by maxOg. Fails fast — no spend — on unknown/paused services or when the price exceeds the cap.',
+          'Autonomously pay a service’s 402 invoice by calling PaymentRouter.pay(serviceId, nonce, payTo) on 0G Galileo, which binds the invoice nonce to the payment on-chain, then return the response body. Spends real OG from the configured buyer key. The amount paid is capped at the price the service lists ON-CHAIN, never the price its own 402 asks for, and payment is refused unless the invoice pays the registered payout address for the requested service id. maxOg is an extra budget ceiling on top of that. Fails fast — no spend — on unknown/paused services, on an invoice that disagrees with the registry, or when the listed price exceeds maxOg.',
       inputSchema: {
         id: z.number().int().positive().describe('service id to buy'),
         maxOg: z
           .string()
           .optional()
-          .describe('refuse invoices priced above this many OG (e.g. "3")'),
+            .describe('optional budget ceiling in OG (e.g. "3"); the on-chain listed price caps the spend regardless'),
         method: z.string().optional().describe('HTTP method for the paid request (default GET)'),
         body: z.string().optional().describe('JSON request body to send with the paid request'),
       },

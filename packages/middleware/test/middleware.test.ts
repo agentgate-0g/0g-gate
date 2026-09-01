@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import os from 'node:os';
 import path from 'node:path';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
 import { AgentGateError, decodeXPaymentResponse, encodeXPayment, type PaymentRequiredResponse } from '@agentgate/shared';
 import { createApp } from '../src/index';
+import { MemoryInvoiceStore } from '../src/invoice-store';
 import {
   adminMap,
   bootGateway,
@@ -696,6 +697,8 @@ describe('request hardening', () => {
         }),
         chain: new FakeChainClient(),
         logger: silentLogger,
+        // satisfies the separate live-mode durability guard, which this test is not about
+        invoiceStore: new MemoryInvoiceStore(),
       }),
     ).not.toThrow();
   });
@@ -716,5 +719,79 @@ describe('rate limiting', () => {
     } finally {
       await gw.close();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A live gateway must not hold invoices only in memory.
+//
+// PaymentRouter.pay forwards msg.value to the seller inside the same
+// transaction — there is no escrow and no refund function anywhere in the three
+// contracts. So an invoice lost to a restart is a buyer who paid and cannot be
+// served: the seller has the money, and nothing can return it. FileInvoiceStore
+// exists for exactly this, but it is opt-in, which means the unsafe default is
+// the one that runs when nobody remembers the env var.
+// ---------------------------------------------------------------------------
+describe('live mode refuses a memory-backed invoice store', () => {
+  const liveBase = {
+    mode: 'live' as const,
+    adminToken: 'a-strong-unique-token',
+    gateSignerKey: `0x${'ab'.repeat(32)}`,
+    paymentRouterAddress: `0x${'11'.repeat(20)}`,
+  };
+
+  it('refuses to build when neither a store nor a path is supplied', () => {
+    expect(() =>
+      createApp({
+        config: testConfig(liveBase),
+        chain: new FakeChainClient(),
+        logger: silentLogger,
+      }),
+    ).toThrow(AgentGateError);
+  });
+
+  it('refuses a path that is present but blank', () => {
+    expect(() =>
+      createApp({
+        config: testConfig(liveBase),
+        chain: new FakeChainClient(),
+        logger: silentLogger,
+        invoiceStorePath: '   ',
+      }),
+    ).toThrow(AgentGateError);
+  });
+
+  it('accepts a configured path', () => {
+    const p = `${os.tmpdir()}/agentgate-invoice-guard-${process.pid}.json`;
+    expect(() =>
+      createApp({
+        config: testConfig(liveBase),
+        chain: new FakeChainClient(),
+        logger: silentLogger,
+        invoiceStorePath: p,
+      }),
+    ).not.toThrow();
+    rmSync(p, { force: true });
+  });
+
+  it('accepts an injected store — the caller owns durability then', () => {
+    expect(() =>
+      createApp({
+        config: testConfig(liveBase),
+        chain: new FakeChainClient(),
+        logger: silentLogger,
+        invoiceStore: new MemoryInvoiceStore(),
+      }),
+    ).not.toThrow();
+  });
+
+  it('leaves mock mode alone — no real money is at risk there', () => {
+    expect(() =>
+      createApp({
+        config: testConfig({ mode: 'mock' }),
+        chain: new FakeChainClient(),
+        logger: silentLogger,
+      }),
+    ).not.toThrow();
   });
 });

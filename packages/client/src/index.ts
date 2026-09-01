@@ -23,6 +23,14 @@ export interface AgentGateClientOpts {
   signer: AnySigner;
   /** Refuse to pay any invoice priced above this (wei decimal string). */
   maxPriceWei?: Wei;
+  /**
+   * Refuse to pay unless the invoice pays THIS address. The 402 is served by
+   * the seller; the payout address is on-chain. Without this, a seller can
+   * list one payout in the registry and invoice to another.
+   */
+  expectPayTo?: string;
+  /** Refuse to pay unless the invoice bills THIS service id. */
+  expectServiceId?: number;
   logger?: Logger;
   /** Wait after the on-chain transfer before retrying with proof. Default: 0 (mock) / 3000 (live). */
   settleDelayMs?: number;
@@ -169,7 +177,7 @@ export function createAgentGateClient(opts: AgentGateClientOpts): AgentGateClien
   if (!opts || typeof opts !== 'object') {
     throw new AgentGateError('BAD_OPTS', 'createAgentGateClient requires an options object', 500);
   }
-  const { chain, signer, maxPriceWei, logger } = opts;
+  const { chain, signer, maxPriceWei, expectPayTo, expectServiceId, logger } = opts;
   if (!chain || typeof chain.transfer !== 'function') {
     throw new AgentGateError('BAD_OPTS', 'opts.chain must be a ChainClient', 500);
   }
@@ -256,6 +264,24 @@ export function createAgentGateClient(opts: AgentGateClientOpts): AgentGateClien
       throw new AgentGateError(
         'PRICE_EXCEEDED',
         `invoice price ${reqs.maxAmountRequired} wei exceeds maxPriceWei ${maxPriceWei}`,
+        402,
+      );
+    }
+
+    // Identity guard — the invoice is seller-controlled, the registry is not.
+    // A price cap alone does not help if the money can be redirected, or billed
+    // against a service the caller never asked for.
+    if (expectPayTo !== undefined && reqs.payTo.toLowerCase() !== expectPayTo.toLowerCase()) {
+      throw new AgentGateError(
+        'INVOICE_MISMATCH',
+        `invoice pays ${reqs.payTo} but service ${expectServiceId ?? '?'} registered ${expectPayTo}`,
+        402,
+      );
+    }
+    if (expectServiceId !== undefined && reqs.extra.serviceId !== expectServiceId) {
+      throw new AgentGateError(
+        'INVOICE_MISMATCH',
+        `invoice bills service ${reqs.extra.serviceId} but ${expectServiceId} was requested`,
         402,
       );
     }
