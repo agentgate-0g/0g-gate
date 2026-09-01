@@ -319,7 +319,7 @@ None of the three is upgradable — there is no proxy, so a redeploy is a **new 
 - Indexer-free chain client — viem view calls + `eth_getLogs`, no API key in the read path
 - MCP server for any agent framework — `npx agentgate-0g mcp`
 - Importable SDK — the same package is a library: `import { wrapService, buyService, listServices } from 'agentgate-0g'`
-- CLI **v1.0.3**
+- CLI **v1.0.4** — defaults point at the audited contract set
 
 **Next**
 

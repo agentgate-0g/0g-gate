@@ -189,8 +189,8 @@ All re-verified against `https://evmrpc-testnet.0g.ai` on 2026-08-31.
 | pay tx | `0xebee2bc6…2a815` — status **1**, block 52359259 → PaymentRouter |
 | attest tx | `0xd0a24968…a063be` — status **1**, block 52359289 → Registry |
 | Wire scheme | `exact-settled` (NOT x402 `exact`) — visible in the 402 body |
-| Tests | **460** vitest passed, **42** Foundry passed |
-| npm | `agentgate-0g@1.0.3` |
+| Tests | **463** vitest passed, **77** Foundry passed |
+| npm | `agentgate-0g@1.0.4` |
 
 ---
 
