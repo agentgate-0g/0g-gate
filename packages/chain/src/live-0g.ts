@@ -1,4 +1,6 @@
 import {
+  encodeAbiParameters,
+  keccak256,
   BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient,
   defineChain, http, parseEventLogs, TransactionReceiptNotFoundError,
   WaitForTransactionReceiptTimeoutError,
@@ -484,11 +486,23 @@ export class Live0gClient implements ChainClient {
     return receipt;
   }
 
-  /** Has this payment already been scored for this service? (`seenPayments`) */
-  private async isAttested(serviceId: bigint, paymentTxHash: Hash): Promise<boolean> {
+  /**
+   * Has this payment already been scored for this service? (`seenPayments`)
+   *
+   * The registry dedups on the ROUTER SETTLEMENT key, not on the supplied tx
+   * hash — the hash is display-only and is never a key anywhere. Probing by
+   * hash returns false for every input, which would silently disable the
+   * duplicate-race recovery this exists to serve and report a benign duplicate
+   * as TX_FAILED. Mirrors PaymentRouter.nonceKey exactly.
+   */
+  private async isAttested(serviceId: bigint, nonce: bigint, payer: string): Promise<boolean> {
+    const key = keccak256(encodeAbiParameters(
+      [{ type: 'uint64' }, { type: 'uint256' }, { type: 'address' }],
+      [serviceId, nonce, normalizeAddress(payer) as `0x${string}`],
+    ));
     return await this.pub.readContract({
       address: this.registry(), abi: REGISTRY_ABI,
-      functionName: 'seenPayments', args: [serviceId, paymentTxHash],
+      functionName: 'seenPayments', args: [serviceId, key],
     });
   }
 
@@ -580,7 +594,7 @@ export class Live0gClient implements ChainClient {
     // And this is the path when the duplicate LOSES A RACE: both writes cleared
     // estimation, one reverted on execution, and a receipt carries no reason —
     // so ask the registry whether the payment ended up attested regardless.
-    await this.settled(hash, 'recordAttestation', () => this.isAttested(serviceId, paymentTxHash));
+    await this.settled(hash, 'recordAttestation', () => this.isAttested(serviceId, nonce, payer));
     return { txHash: hash };
   }
 

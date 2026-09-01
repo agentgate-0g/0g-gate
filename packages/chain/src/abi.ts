@@ -219,6 +219,25 @@ export const REGISTRY_ABI = [
   },
   {
     "type": "function",
+    "name": "paymentTargetOf",
+    "inputs": [
+      {
+        "name": "serviceId",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "recordAttestation",
     "inputs": [
       {

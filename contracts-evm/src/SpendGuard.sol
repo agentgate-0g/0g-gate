@@ -167,7 +167,7 @@ contract SpendGuard {
         // Bind the money to the service it is charged against. Without this a
         // gate could debit under one service's id and pay an unrelated address,
         // making the serviceId in DebitApproved decorative.
-        if (payTo != REGISTRY.getService(serviceId).paymentTarget) revert WrongPayee();
+        if (payTo != REGISTRY.paymentTargetOf(serviceId)) revert WrongPayee();
 
         if (seenRefs[policyId][paymentRef]) revert DuplicateRef();
 

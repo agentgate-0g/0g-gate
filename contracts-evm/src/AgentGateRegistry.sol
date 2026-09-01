@@ -128,6 +128,15 @@ contract AgentGateRegistry {
         return _loadService(serviceId);
     }
 
+    /// @notice Just the payout target for `serviceId`, without the rest of the
+    ///         record. `getService` returns the whole Service — every string
+    ///         and every entry of the seller-controlled `accepts[]` — so a
+    ///         caller that only needs the payee would otherwise pay gas
+    ///         proportional to how many prices the seller happened to list.
+    function paymentTargetOf(uint64 serviceId) external view returns (address) {
+        return _loadService(serviceId).paymentTarget;
+    }
+
     event AttestationRecorded(
         uint64 indexed serviceId,
         bytes32 indexed paymentTxHash,

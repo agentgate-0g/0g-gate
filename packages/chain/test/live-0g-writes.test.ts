@@ -439,6 +439,36 @@ describe('Live0gClient writes', () => {
     // registry, by "recordAttestation still throws for a revert that is not a
     // duplicate" above. What matters here is that neither path reports success.
   }, 30_000);
+  it('seenPayments is keyed on the router settlement, and the client agrees', async () => {
+    // recordAttestation dedups on nonceKey(serviceId, nonce, payer), NOT on the
+    // supplied tx hash. isAttested() is the client's duplicate-race recovery
+    // probe; if it queries the wrong key it silently returns false forever and
+    // a benign duplicate is reported as TX_FAILED.
+    const { txHash } = await client.transfer(
+      { to: seller.address, amountWei: '1000000000000000', nonce: '9911', serviceId: 1 },
+      buyerSigner,
+    );
+    await client.recordAttestation(
+      { serviceId: 1, nonce: '9911', payer: buyer.address, paymentTxHash: txHash, success: true },
+      gateSigner,
+    );
+
+    const pub4 = createPublicClient({ chain: CHAIN, transport: http(RPC) });
+    const key = await pub4.readContract({
+      address: routerAddress, abi: PAYMENT_ROUTER_ABI, functionName: 'nonceKey',
+      args: [1n, 9911n, buyer.address],
+    });
+    // The settlement key IS the dedup key...
+    await expect(pub4.readContract({
+      address: registryAddress, abi: REGISTRY_ABI, functionName: 'seenPayments',
+      args: [1n, key],
+    })).resolves.toBe(true);
+    // ...and the tx hash is NOT, so probing by hash can never find it.
+    await expect(pub4.readContract({
+      address: registryAddress, abi: REGISTRY_ABI, functionName: 'seenPayments',
+      args: [1n, txHash as `0x${string}`],
+    })).resolves.toBe(false);
+  });
 });
 
 // Runs LAST on purpose: it reads back the whole history the suite above wrote —
@@ -585,4 +615,5 @@ describe('listRecentActivity', () => {
     const seen = feed.filter((e) => hashes.includes(e.txHash)).map((e) => e.txHash);
     expect(seen).toEqual(expected);
   }, 30_000);
+
 });
