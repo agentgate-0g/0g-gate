@@ -30,6 +30,31 @@ was meaningful.
 
 ## Deployed addresses
 
+> **Two deployments are live.** The audited-and-fixed contract set was deployed
+> 2026-09-01 and is NOT yet in use: the CLI defaults, the hosted gateway and the
+> Wave 3 demo all still point at the original set below it. Cutting over is a
+> coordinated change — the ABIs differ, so the contracts and the gateway must
+> switch together, and a new registry starts from empty state with no service
+> and no score carried across.
+
+### Audited set — deployed 2026-09-01, awaiting cutover
+
+| Contract | Address | Explorer |
+|---|---|---|
+| `AgentGateRegistry` | `0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1` | [explorer](https://chainscan-galileo.0g.ai/address/0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1) |
+| `PaymentRouter` | `0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F` | [explorer](https://chainscan-galileo.0g.ai/address/0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F) |
+| `SpendGuard` | `0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781` | [explorer](https://chainscan-galileo.0g.ai/address/0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781) |
+
+Block 52458928, all three in one block. Total cost **0.015197 OG**
+(3,799,198 gas at 6 gwei). Constructor wiring verified live: `Registry.ROUTER()`
+returns the router and `SpendGuard.REGISTRY()` returns the registry.
+
+Closes three rounds of audit findings. Note the operational consequence: a
+service's attestor may no longer be its owner or its payout address, so seeding
+this registry needs three distinct addresses per service, not one.
+
+### Original set — still live, still what everything uses
+
 | Contract | Address | Explorer |
 |---|---|---|
 | `AgentGateRegistry` | `0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA` | [explorer](https://chainscan-galileo.0g.ai/address/0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA) |
