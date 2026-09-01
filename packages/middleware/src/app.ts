@@ -302,10 +302,13 @@ export function createApp(deps: MiddlewareDeps): Express {
    */
   function runAttestation(
     service: ServiceRecord,
-    paymentTxHash: string,
+    settlement: { paymentTxHash: string; nonce: string; payer: string },
     success: boolean,
   ): void {
-    const input = { serviceId: service.id, paymentTxHash, success };
+    const { paymentTxHash, nonce, payer } = settlement;
+    // nonce + payer name the PaymentRouter settlement; the registry verifies it
+    // exists and refuses a self-paying owner, so a score cannot be minted.
+    const input = { serviceId: service.id, nonce, payer, paymentTxHash, success };
     const signer = gateSignerFor(service);
     const msg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
     const attempt = (n: number): void => {
@@ -349,12 +352,19 @@ export function createApp(deps: MiddlewareDeps): Express {
    */
   function scheduleAttestation(
     service: ServiceRecord,
-    paymentTxHash: string,
+    settlement: { paymentTxHash: string; nonce: string; payer: string },
     success: boolean,
   ): void {
     void attestations
-      .enqueue({ paymentTxHash, serviceId: service.id, success, enqueuedAt: Date.now() })
-      .then(() => runAttestation(service, paymentTxHash, success));
+      .enqueue({
+        paymentTxHash: settlement.paymentTxHash,
+        nonce: settlement.nonce,
+        payer: settlement.payer,
+        serviceId: service.id,
+        success,
+        enqueuedAt: Date.now(),
+      })
+      .then(() => runAttestation(service, settlement, success));
   }
 
   /**
@@ -367,7 +377,7 @@ export function createApp(deps: MiddlewareDeps): Express {
       for (const p of pending) {
         const service = await services.get(p.serviceId).catch(() => null);
         if (service) {
-          runAttestation(service, p.paymentTxHash, p.success);
+          runAttestation(service, { paymentTxHash: p.paymentTxHash, nonce: p.nonce, payer: p.payer }, p.success);
         } else {
           logger.warn('attestation_replay_skipped_unknown_service', {
             serviceId: p.serviceId,
@@ -612,7 +622,11 @@ export function createApp(deps: MiddlewareDeps): Express {
       // (F1): a payer that is the owner or the payout account is wash-trading.
       const selfPaid = isSelfPayment(verdict.from, service);
       if (outcome.kind === 'response' && !selfPaid) {
-        scheduleAttestation(service, txHashHeader, success);
+        scheduleAttestation(
+          service,
+          { paymentTxHash: txHashHeader, nonce: nonceHeader, payer: verdict.from },
+          success,
+        );
       } else {
         logger.info('attestation_skipped', {
           serviceId: id,

@@ -108,9 +108,16 @@ partial-prune branches).
 
 ## Deploying
 
-This package ships `script/Deploy.s.sol`, which deploys
-all three contracts (no constructor arguments) in one transaction batch and
-prints the resulting addresses to paste into `.env` and the table above.
+This package ships `script/Deploy.s.sol`, which deploys all three contracts in
+one transaction batch and prints the resulting addresses to paste into `.env`
+and the table above.
+
+The deploy ORDER is load-bearing and the script encodes it:
+`PaymentRouter` -> `AgentGateRegistry(router)` -> `SpendGuard(registry)`. The
+registry verifies every attestation against a router settlement, and the guard
+reads the registry for trust scores and payout targets, so each contract takes
+the previous one as a constructor argument. There is no cycle, and deploying
+them individually in a different order will not link up.
 
 The script has already been dry-run against a local Anvil fork of live 0G
 Galileo state (see **Dry run** below) — the bytecode deploys cleanly under

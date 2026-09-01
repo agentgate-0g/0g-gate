@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+import {PaymentRouter} from "./PaymentRouter.sol";
+
 /// @title AgentGateRegistry — service discovery + payment-attestation reputation
 /// @notice Service registry + payment-attestation reputation ledger.
 ///         Semantics are preserved exactly: 1-based ids, caller becomes owner,
@@ -8,6 +10,13 @@ pragma solidity 0.8.28;
 ///         all timestamps are UNIX MILLISECONDS (block.timestamp * 1000) because
 ///         every off-chain reader is contracted on ms.
 contract AgentGateRegistry {
+    /// The router whose settlements back this registry's attestations.
+    PaymentRouter public immutable ROUTER;
+
+    constructor(PaymentRouter router) {
+        ROUTER = router;
+    }
+
     /// Minimum price for any accepted option, in the asset's atomic units.
     /// 1e12 wei = 1e-6 OG. A floor, not a fee: it keeps a service from being
     /// registered at a price so small that the gas to pay it dwarfs the payment.
@@ -55,6 +64,8 @@ contract AgentGateRegistry {
     error ServiceInactive();
     error DuplicateAttestation();
     error InvalidPrice();
+    error NoSuchPayment();
+    error SelfPayment();
     error EmptyName();
 
     event ServiceRegistered(
@@ -85,7 +96,7 @@ contract AgentGateRegistry {
         if (_isBlank(name)) revert EmptyName();
         if (accepts.length == 0) revert InvalidPrice();
         for (uint256 i = 0; i < accepts.length; i++) {
-            if (accepts[i].amount < MIN_PRICE_WEI) revert InvalidPrice();
+            if (accepts[i].amount < _minPrice(accepts[i].decimals)) revert InvalidPrice();
         }
 
         // 1-based ids: bump the counter first, then use it as the id.
@@ -131,7 +142,9 @@ contract AgentGateRegistry {
     mapping(uint64 => uint64) public totalCalls;
     /// serviceId => successful calls recorded (full history; never capped).
     mapping(uint64 => uint64) public successCalls;
-    /// serviceId => paymentTxHash => already attested? Duplicate guard.
+    /// serviceId => router settlement key => already attested? Deduping on the
+    /// SETTLEMENT, not the supplied tx hash, is what stops one payment being
+    /// attested many times under different hashes.
     mapping(uint64 => mapping(bytes32 => bool)) public seenPayments;
 
     /// serviceId => ring buffer of the last MAX_ATTESTATIONS attestations.
@@ -139,16 +152,43 @@ contract AgentGateRegistry {
     /// serviceId => next write slot in the ring (== oldest entry once full).
     mapping(uint64 => uint256) private _attHead;
 
-    /// @notice Record the outcome of one paid call, identified by the payment tx
-    ///         hash. Caller must be the service's attestor or owner.
-    function recordAttestation(uint64 serviceId, bytes32 paymentTxHash, bool success)
-        external
-    {
+    /// @notice Record the outcome of one paid call, identified by the router
+    ///         settlement that paid for it.
+    /// @param nonce          the invoice nonce that was settled
+    /// @param payer          the address that settled it
+    /// @param paymentTxHash  the settling transaction, kept for display only —
+    ///                       the SCORE is backed by the (serviceId, nonce,
+    ///                       payer) settlement above, which the chain verifies.
+    function recordAttestation(
+        uint64 serviceId,
+        uint256 nonce,
+        address payer,
+        bytes32 paymentTxHash,
+        bool success
+    ) external {
         Service storage s = _loadService(serviceId);
-        if (msg.sender != s.attestor && msg.sender != s.owner) revert NotAuthorized();
-        if (!s.active) revert ServiceInactive();
-        if (seenPayments[serviceId][paymentTxHash]) revert DuplicateAttestation();
-        seenPayments[serviceId][paymentTxHash] = true;
+
+        // The subject of a score is not a witness for it. The owner was
+        // previously accepted here, so a seller minted its own reputation.
+        if (msg.sender != s.attestor) revert NotAuthorized();
+
+        // `active` deliberately does NOT gate this. It is a discovery flag;
+        // gating the ledger on it let an owner front-run a failure attestation
+        // with setActive(false) and erase the failure without a trace.
+
+        // Every point must map to a settlement the chain can see. Before this,
+        // `paymentTxHash` was an unconstrained bytes32 and a perfect score cost
+        // only gas.
+        bytes32 paymentKey = ROUTER.nonceKey(serviceId, nonce, payer);
+        if (!ROUTER.seenNonce(paymentKey)) revert NoSuchPayment();
+
+        // On-chain anti-wash-trading, mirroring the gateway's isSelfPayment.
+        // Note this stops the literal self-pay, not a sybil paying from a fresh
+        // address — that needs the staked attestations on the roadmap.
+        if (payer == s.owner || payer == s.paymentTarget) revert SelfPayment();
+
+        if (seenPayments[serviceId][paymentKey]) revert DuplicateAttestation();
+        seenPayments[serviceId][paymentKey] = true;
 
         // Saturating: a (practically unreachable) overflow pins at MAX rather
         // than reverting and bricking the service's score forever.
@@ -236,6 +276,16 @@ contract AgentGateRegistry {
     function _loadService(uint64 serviceId) internal view returns (Service storage s) {
         s = _services[serviceId];
         if (s.owner == address(0)) revert ServiceNotFound();
+    }
+
+    /// The dust floor for one payment option, in that option's own atomic
+    /// units: 1e-6 of a whole unit. For 18 decimals this is exactly
+    /// MIN_PRICE_WEI. Comparing every asset against the 18-decimal constant
+    /// made a 6-decimal token unregistrable below 1,000,000 whole tokens.
+    function _minPrice(uint8 decimals) internal pure returns (uint256) {
+        if (decimals > 36) revert InvalidPrice();
+        uint256 floorAmt = (10 ** uint256(decimals)) / 1_000_000;
+        return floorAmt == 0 ? 1 : floorAmt;
     }
 
     /// Block time in MILLISECONDS — the unit every off-chain reader expects.

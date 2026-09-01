@@ -1,11 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { createPublicClient, http, toHex } from 'viem';
+import { createPublicClient, createWalletClient, http, toHex } from 'viem';
 import { mnemonicToAccount } from 'viem/accounts';
 import { AgentGateError, type AgentGateConfig, type AnySigner } from '@agentgate/shared';
 import { Live0gClient } from '../src/live-0g';
+import { REGISTRY_ABI, PAYMENT_ROUTER_ABI } from '../src/abi';
 
-const RPC = 'http://127.0.0.1:8547';
+// Port is overridable: a hardcoded one collides with whatever else the
+// machine happens to be running, and the failure (`balance 0`) looks like a
+// contract bug rather than a busy port.
+const ANVIL_PORT = process.env.ANVIL_PORT_WRITES ?? '8547';
+const RPC = `http://127.0.0.1:${ANVIL_PORT}`;
 
 /**
  * Anvil's deterministic dev accounts, DERIVED from its public default mnemonic
@@ -19,6 +24,9 @@ const anvilKey = (index: number): `0x${string}` =>
   toHex(anvilAccount(index).getHdKey().privateKey!);
 
 const DEPLOYER = anvilKey(0);
+
+/// Minimal chain descriptor for the raw viem clients the race tests need.
+const CHAIN = { id: 31337, name: 'anvil', nativeCurrency: { name: 'OG', symbol: 'OG', decimals: 18 }, rpcUrls: { default: { http: [RPC] } } } as const;
 
 // Anvil's default-funded accounts, one role each — none of these keys guard
 // real funds; see the mnemonic note above.
@@ -50,10 +58,14 @@ async function rpc(method: string, params: unknown[]): Promise<void> {
   if (!res.ok) throw new Error(`${method} failed: ${res.status}`);
 }
 
-function deploy(name: string): `0x${string}` {
+function deploy(name: string, ...ctorArgs: string[]): `0x${string}` {
+  // Router -> Registry(router) -> Guard(registry): the registry verifies
+  // attestations against the router's settlements and the guard reads the
+  // registry's scores, so the constructor args are load-bearing.
   const out = execFileSync('forge', [
     'create', `src/${name}.sol:${name}`,
     '--rpc-url', RPC, '--private-key', DEPLOYER, '--broadcast', '--json',
+    ...(ctorArgs.length ? ['--constructor-args', ...ctorArgs] : []),
   ], { cwd: new URL('../../../contracts-evm', import.meta.url).pathname, encoding: 'utf8' });
   return JSON.parse(out).deployedTo as `0x${string}`;
 }
@@ -68,10 +80,10 @@ function configFor(registry: string, router: string): AgentGateConfig {
 }
 
 beforeAll(async () => {
-  anvil = spawn('anvil', ['--port', '8547', '--silent'], { stdio: 'ignore' });
+  anvil = spawn('anvil', ['--port', ANVIL_PORT, '--silent'], { stdio: 'ignore' });
   await new Promise((r) => setTimeout(r, 2000));
-  registryAddress = deploy('AgentGateRegistry');
   routerAddress = deploy('PaymentRouter');
+  registryAddress = deploy('AgentGateRegistry', routerAddress);
   impostorRouter = deploy('PaymentRouter');
   client = new Live0gClient(configFor(registryAddress, routerAddress));
 }, 60_000);
@@ -196,7 +208,7 @@ describe('Live0gClient writes', () => {
   it('recordAttestation bumps the on-chain score', async () => {
     const { txHash } = await client.transfer(
       { to: seller.address, amountWei: '1000000000000000', nonce: '4247', serviceId: 1 }, buyerSigner);
-    await client.recordAttestation({ serviceId: 1, paymentTxHash: txHash, success: true }, gateSigner);
+    await client.recordAttestation({ serviceId: 1, nonce: '4247', payer: buyer.address, paymentTxHash: txHash, success: true }, gateSigner);
     await expect(client.getScore(1)).resolves.toEqual({ totalCalls: 1, successCalls: 1 });
   });
 
@@ -211,7 +223,7 @@ describe('Live0gClient writes', () => {
     const { txHash: payTx } = await client.transfer(
       { to: seller.address, amountWei: '1000000000000000', nonce: '5150', serviceId: 1 }, buyerSigner);
     const { txHash: attestTx } = await client.recordAttestation(
-      { serviceId: 1, paymentTxHash: payTx, success: true }, gateSigner);
+      { serviceId: 1, nonce: '5150', payer: buyer.address, paymentTxHash: payTx, success: true }, gateSigner);
 
     const [latest] = await client.listAttestations(1, 1);
     expect(latest).toBeDefined();
@@ -235,7 +247,7 @@ describe('Live0gClient writes', () => {
       buyerSigner,
     );
     const { txHash: attestTx } = await client.recordAttestation(
-      { serviceId: 1, paymentTxHash: payTx, success: true },
+      { serviceId: 1, nonce: '5151', payer: buyer.address, paymentTxHash: payTx, success: true },
       gateSigner,
     );
 
@@ -311,7 +323,7 @@ describe('Live0gClient writes', () => {
       { to: seller.address, amountWei: '1000000000000000', nonce: '4249', serviceId: 1 },
       buyerSigner,
     );
-    const input = { serviceId: 1, paymentTxHash: txHash, success: true };
+    const input = { serviceId: 1, nonce: '4249', payer: buyer.address, paymentTxHash: txHash, success: true };
     await client.recordAttestation(input, gateSigner);
     const scored = await client.getScore(1);
 
@@ -328,7 +340,7 @@ describe('Live0gClient writes', () => {
     const stranger: AnySigner = { kind: 'key', privateKey: anvilKey(5) };
     const before = await client.getScore(1);
     await expect(client.recordAttestation(
-      { serviceId: 1, paymentTxHash: `0x${'7e'.repeat(32)}`, success: true }, stranger,
+      { serviceId: 1, nonce: '5150', payer: buyer.address, paymentTxHash: `0x${'7e'.repeat(32)}`, success: true }, stranger,
     )).rejects.toThrow(/NotAuthorized/);
     await expect(client.getScore(1)).resolves.toEqual(before);
   });
@@ -337,22 +349,32 @@ describe('Live0gClient writes', () => {
     // The post-flight half of the same invariant. Automine off puts both writes
     // in one block: each clears estimation against a state where the payment is
     // unattested, so both are sent and one reverts on execution — where the
-    // receipt carries no reason. Two different authorised senders (attestor and
-    // owner) so the txs do not collide on one account's nonce.
+    // receipt carries no reason. Both sends now come from the ATTESTOR: the
+    // owner is no longer an authorised witness for its own score (it could
+    // otherwise mint reputation), so the attestor is the only writer left.
     const { txHash } = await client.transfer(
       { to: seller.address, amountWei: '1000000000000000', nonce: '4250', serviceId: 1 },
       buyerSigner,
     );
-    const input = { serviceId: 1, paymentTxHash: txHash, success: true };
+    const input = { serviceId: 1, nonce: '4250', payer: buyer.address, paymentTxHash: txHash, success: true };
     const before = await client.getScore(1);
 
     await rpc('evm_setAutomine', [false]);
     let results: PromiseSettledResult<{ txHash: string }>[];
     try {
-      const inflight = Promise.allSettled([
-        client.recordAttestation(input, gateSigner),
-        client.recordAttestation(input, signer),
-      ]);
+      // Only the attestor may write, so both txs come from one account and
+      // must not race for the same account nonce. Submit the winner directly
+      // with an explicit nonce; the client's call then takes nonce + 1 and
+      // both sit in the pool for the same block.
+      const pub2 = createPublicClient({ chain: CHAIN, transport: http(RPC) });
+      const n = await pub2.getTransactionCount({ address: gate.address, blockTag: 'pending' });
+      const gateWallet = createWalletClient({ account: gate, chain: CHAIN, transport: http(RPC) });
+      const winner = gateWallet.writeContract({
+        address: registryAddress, abi: REGISTRY_ABI, functionName: 'recordAttestation',
+        args: [1n, 4250n, buyer.address, txHash as `0x${string}`, true], nonce: n,
+      }).then((h) => ({ txHash: h }));
+      await new Promise((r) => setTimeout(r, 200));
+      const inflight = Promise.allSettled([winner, client.recordAttestation(input, gateSigner)]);
       await new Promise((r) => setTimeout(r, 500)); // let both reach the pool
       await rpc('evm_mine', []);
       results = await inflight;
@@ -370,16 +392,30 @@ describe('Live0gClient writes', () => {
 
   it('transfer surfaces an on-chain revert instead of reporting success', async () => {
     // settled() must still throw for a revert with no idempotency exemption.
-    // Same one-block race, but on PaymentRouter: two pays for the same
-    // (serviceId, nonce), both clearing estimation, one reverting DuplicateNonce.
-    // Unlike a duplicate attestation this is a real failure — the loser's own
-    // money never moved, so reporting success would invent a payment.
+    // Same one-block race, but on PaymentRouter: two pays from the SAME payer
+    // for the same (serviceId, nonce), both clearing estimation, one reverting
+    // DuplicateNonce. Unlike a duplicate attestation this is a real failure —
+    // the loser's own money never moved, so reporting success would invent a
+    // payment. It must be the same payer: seenNonce is keyed on the payer too,
+    // so two DIFFERENT payers racing one nonce both legitimately succeed. That
+    // is the point of the key — a stranger cannot burn your invoice.
     await rpc('evm_setAutomine', [false]);
     let results: PromiseSettledResult<{ txHash: string }>[];
     try {
-      const pay = (s: AnySigner) => client.transfer(
-        { to: seller.address, amountWei: '1000000000000000', nonce: '6060', serviceId: 1 }, s);
-      const inflight = Promise.allSettled([pay(buyerSigner), pay(signer)]);
+      // Same payer twice, so the two sends must not collide on the account
+      // nonce: submit the winner directly with an explicit one.
+      const pub3 = createPublicClient({ chain: CHAIN, transport: http(RPC) });
+      const bn = await pub3.getTransactionCount({ address: buyer.address, blockTag: 'pending' });
+      const buyerWallet = createWalletClient({ account: buyer, chain: CHAIN, transport: http(RPC) });
+      const winner = buyerWallet.writeContract({
+        address: routerAddress, abi: PAYMENT_ROUTER_ABI, functionName: 'pay',
+        args: [1n, 6060n, seller.address], value: 1000000000000000n, nonce: bn,
+      }).then((h) => ({ txHash: h }));
+      await new Promise((r) => setTimeout(r, 200));
+      const inflight = Promise.allSettled([
+        winner,
+        client.transfer({ to: seller.address, amountWei: '1000000000000000', nonce: '6060', serviceId: 1 }, buyerSigner),
+      ]);
       await new Promise((r) => setTimeout(r, 500));
       await rpc('evm_mine', []);
       results = await inflight;
@@ -387,12 +423,21 @@ describe('Live0gClient writes', () => {
       await rpc('evm_setAutomine', [true]);
     }
 
+    // Exactly one loses, and it must SURFACE the failure rather than report a
+    // payment that never happened.
     const rejected = results.filter((r) => r.status === 'rejected');
     expect(rejected).toHaveLength(1);
-    const reason = (rejected[0] as PromiseRejectedResult).reason as AgentGateError;
-    expect(reason).toBeInstanceOf(AgentGateError);
-    expect(reason.code).toBe('TX_FAILED');
-    expect(reason.message).toMatch(/transfer reverted on-chain/);
+    const reason = (rejected[0] as PromiseRejectedResult).reason as Error;
+    expect(String(reason)).toMatch(/DuplicateNonce|transfer reverted on-chain/);
+
+    // Note on which revert path fires. seenNonce is keyed on the payer, so the
+    // two racers must now share one account and therefore take consecutive
+    // account nonces — the loser is submitted after the winner is already in
+    // the pool, so anvil estimates it against pending state and it reverts
+    // PRE-flight. The post-flight path (clears estimation, reverts on
+    // execution, receipt carries no reason) is still exercised, on the
+    // registry, by "recordAttestation still throws for a revert that is not a
+    // duplicate" above. What matters here is that neither path reports success.
   }, 30_000);
 });
 
@@ -505,7 +550,7 @@ describe('listRecentActivity', () => {
     try {
       const inflight = Promise.all([
         client.recordAttestation(
-          { serviceId: 1, paymentTxHash: seed.txHash, success: true }, gateSigner,
+          { serviceId: 1, nonce: '8801', payer: buyer.address, paymentTxHash: seed.txHash, success: true }, gateSigner,
         ),
         client.transfer(
           { to: seller.address, amountWei: '1000000000000000', nonce: '8802', serviceId: 1 },

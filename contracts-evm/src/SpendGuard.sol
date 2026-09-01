@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+import {AgentGateRegistry} from "./AgentGateRegistry.sol";
+
 /// @title SpendGuard — on-chain x402 spend-firewall escrow
 /// @notice EVM port of contracts/spend-guard. An agent opens a Policy and
 ///         pre-funds an escrow; before serving a paid call the policy's `gate`
@@ -8,6 +10,13 @@ pragma solidity 0.8.28;
 ///         atomically on any violation, so the payment never settles.
 ///         All timestamps are UNIX MILLISECONDS, matching `windowMs`.
 contract SpendGuard {
+    /// The registry this guard reads scores and payout targets from.
+    AgentGateRegistry public immutable REGISTRY;
+
+    constructor(AgentGateRegistry registry) {
+        REGISTRY = registry;
+    }
+
     /// Trust tiers are a small 0..=255 scale; the score's source is off-chain
     /// (the registry's success/total ratio, bucketed).
     struct Policy {
@@ -28,6 +37,8 @@ contract SpendGuard {
     error NotAuthorized();
     error Paused();
     error ZeroAmount();
+    error ZeroPayTo();
+    error WrongPayee();
     error PerCallExceeded();
     error UntrustedService();
     error DuplicateRef();
@@ -79,7 +90,17 @@ contract SpendGuard {
         uint8 minTrustTier
     ) external returns (uint64 policyId) {
         // A policy that could accept deposits but never debit is a funds trap.
-        if (perCallCap == 0 || maxCallsInWindow == 0 || budget == 0 || perCallCap > budget) {
+        //
+        // windowMs is floored at one second because _nowMs() advances in
+        // 1000ms steps: every `nowMs - times[i]` is a multiple of 1000, so a
+        // window of 0 prunes even the entry written in this block and any
+        // window <= 1000 collapses to same-block-only. Either way keptLen
+        // stays 0, `keptLen >= maxCallsInWindow` never fires, and the policy
+        // advertises a rate cap it does not enforce.
+        if (
+            perCallCap == 0 || maxCallsInWindow == 0 || budget == 0
+                || perCallCap > budget || windowMs < 1000 || gate == address(0)
+        ) {
             revert InvalidConfig();
         }
 
@@ -123,16 +144,31 @@ contract SpendGuard {
         uint64 serviceId,
         uint256 amount,
         address payTo,
-        bytes32 paymentRef,
-        uint8 trustTier
+        bytes32 paymentRef
     ) external {
         Policy storage p = _loadPolicy(policyId);
 
         if (msg.sender != p.gate) revert NotAuthorized();
         if (p.paused) revert Paused();
         if (amount == 0) revert ZeroAmount();
+        // A CALL to address(0) with value SUCCEEDS and burns the funds, so
+        // without this the escrow leaves, the ref is consumed and
+        // DebitApproved is emitted while nobody was paid. PaymentRouter.pay
+        // refuses the same input; both settlement paths must agree.
+        if (payTo == address(0)) revert ZeroPayTo();
         if (amount > p.perCallCap) revert PerCallExceeded();
-        if (trustTier < p.minTrustTier) revert UntrustedService();
+
+        // The tier is derived from the registry, never asserted by the caller.
+        // It used to be a `uint8 trustTier` parameter supplied by `p.gate` —
+        // the exact party this rule exists to constrain — so `255` made the
+        // check unreachable and the firewall's trust rule decorative.
+        if (_tierOf(serviceId) < p.minTrustTier) revert UntrustedService();
+
+        // Bind the money to the service it is charged against. Without this a
+        // gate could debit under one service's id and pay an unrelated address,
+        // making the serviceId in DebitApproved decorative.
+        if (payTo != REGISTRY.getService(serviceId).paymentTarget) revert WrongPayee();
+
         if (seenRefs[policyId][paymentRef]) revert DuplicateRef();
 
         // Budget: must fit BOTH the escrow and the cumulative cap.
@@ -170,6 +206,17 @@ contract SpendGuard {
         if (!ok) revert TransferFailed();
 
         emit DebitApproved(policyId, serviceId, amount, payTo, paymentRef, remaining);
+    }
+
+    /// Registry score -> trust tier. Mirrors packages/shared/src/trust.ts
+    /// exactly (new = 0, reliable = 1, trusted = 2) using integer ratios, so
+    /// on-chain enforcement and off-chain display can never disagree.
+    function _tierOf(uint64 serviceId) internal view returns (uint8) {
+        (uint64 total, uint64 success) = REGISTRY.getScore(serviceId);
+        if (total < 5) return 0;
+        if (total >= 25 && uint256(success) * 100 >= uint256(total) * 95) return 2;
+        if (uint256(success) * 10 >= uint256(total) * 9) return 1;
+        return 0;
     }
 
     /// @notice Withdraw unspent escrow back to the owner. Owner only. Works

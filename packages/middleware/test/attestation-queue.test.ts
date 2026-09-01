@@ -13,8 +13,8 @@ async function tmpFile(): Promise<string> {
 describe('MemoryAttestationQueue', () => {
   it('enqueues, lists, and removes in-memory', async () => {
     const q = new MemoryAttestationQueue();
-    await q.enqueue({ paymentTxHash: 'aa', serviceId: 1, success: true, enqueuedAt: 1 });
-    await q.enqueue({ paymentTxHash: 'bb', serviceId: 2, success: false, enqueuedAt: 2 });
+    await q.enqueue({ paymentTxHash: 'aa', serviceId: 1, nonce: '1', payer: '0x00000000000000000000000000000001', success: true, enqueuedAt: 1 });
+    await q.enqueue({ paymentTxHash: 'bb', serviceId: 2, nonce: '1', payer: '0x00000000000000000000000000000001', success: false, enqueuedAt: 2 });
     expect((await q.list()).map((i) => i.paymentTxHash).sort()).toEqual(['aa', 'bb']);
     await q.remove('aa');
     expect((await q.list()).map((i) => i.paymentTxHash)).toEqual(['bb']);
@@ -23,8 +23,8 @@ describe('MemoryAttestationQueue', () => {
 
   it('enqueue is idempotent on paymentTxHash (mirrors on-chain seen_payments dedup)', async () => {
     const q = new MemoryAttestationQueue();
-    await q.enqueue({ paymentTxHash: 'aa', serviceId: 1, success: true, enqueuedAt: 1 });
-    await q.enqueue({ paymentTxHash: 'aa', serviceId: 1, success: false, enqueuedAt: 9 });
+    await q.enqueue({ paymentTxHash: 'aa', serviceId: 1, nonce: '1', payer: '0x00000000000000000000000000000001', success: true, enqueuedAt: 1 });
+    await q.enqueue({ paymentTxHash: 'aa', serviceId: 1, nonce: '1', payer: '0x00000000000000000000000000000001', success: false, enqueuedAt: 9 });
     expect(await q.list()).toHaveLength(1);
     q.close();
   });
@@ -34,8 +34,8 @@ describe('FileAttestationQueue (F7 — survives restart)', () => {
   it('persists enqueued attestations and reloads them from disk on a new instance', async () => {
     const file = await tmpFile();
     const q1 = new FileAttestationQueue(file);
-    await q1.enqueue({ paymentTxHash: 'aa', serviceId: 1, success: true, enqueuedAt: 1 });
-    await q1.enqueue({ paymentTxHash: 'bb', serviceId: 2, success: false, enqueuedAt: 2 });
+    await q1.enqueue({ paymentTxHash: 'aa', serviceId: 1, nonce: '1', payer: '0x00000000000000000000000000000001', success: true, enqueuedAt: 1 });
+    await q1.enqueue({ paymentTxHash: 'bb', serviceId: 2, nonce: '1', payer: '0x00000000000000000000000000000001', success: false, enqueuedAt: 2 });
     q1.close();
 
     const q2 = new FileAttestationQueue(file);
@@ -51,7 +51,7 @@ describe('FileAttestationQueue (F7 — survives restart)', () => {
   it('remove() persists the deletion so a reloaded instance no longer sees it', async () => {
     const file = await tmpFile();
     const q1 = new FileAttestationQueue(file);
-    await q1.enqueue({ paymentTxHash: 'aa', serviceId: 1, success: true, enqueuedAt: 1 });
+    await q1.enqueue({ paymentTxHash: 'aa', serviceId: 1, nonce: '1', payer: '0x00000000000000000000000000000001', success: true, enqueuedAt: 1 });
     await q1.remove('aa');
     q1.close();
 
@@ -64,7 +64,7 @@ describe('FileAttestationQueue (F7 — survives restart)', () => {
     const file = await tmpFile();
     const q1 = new FileAttestationQueue(file); // no file yet
     expect(await q1.list()).toEqual([]);
-    await q1.enqueue({ paymentTxHash: 'aa', serviceId: 1, success: true, enqueuedAt: 1 });
+    await q1.enqueue({ paymentTxHash: 'aa', serviceId: 1, nonce: '1', payer: '0x00000000000000000000000000000001', success: true, enqueuedAt: 1 });
     q1.close();
 
     // Corrupt the backing file → a fresh instance must not crash.
@@ -82,7 +82,7 @@ describe('FileAttestationQueue (F7 — survives restart)', () => {
   it('writes valid JSON to disk on enqueue', async () => {
     const file = await tmpFile();
     const q = new FileAttestationQueue(file);
-    await q.enqueue({ paymentTxHash: 'aa', serviceId: 1, success: true, enqueuedAt: 1 });
+    await q.enqueue({ paymentTxHash: 'aa', serviceId: 1, nonce: '1', payer: '0x00000000000000000000000000000001', success: true, enqueuedAt: 1 });
     const parsed = JSON.parse(await readFile(file, 'utf8')) as unknown[];
     expect(parsed).toHaveLength(1);
     q.close();

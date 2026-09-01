@@ -277,7 +277,7 @@ export class MockChainHttpClient implements ChainClient {
    * reject, so a genuinely un-recorded attestation stays queued for retry.
    */
   async recordAttestation(
-    input: { serviceId: number; paymentTxHash: string; success: boolean },
+    input: { serviceId: number; nonce: string; payer: string; paymentTxHash: string; success: boolean },
     signer: AnySigner,
   ): Promise<{ txHash: string }> {
     const mockSigner = requireMockSigner(signer);

@@ -25,6 +25,10 @@ export interface PendingAttestation {
   paymentTxHash: string;
   /** Service whose score this attestation feeds. */
   serviceId: number;
+  /** Invoice nonce of the settlement being attested (the registry verifies it). */
+  nonce: string;
+  /** Address that settled it — the registry rejects a self-paying owner. */
+  payer: string;
   /** Whether the served upstream response was a 2xx (success flag recorded on-chain). */
   success: boolean;
   /** ms-epoch the payment was captured (kept for diagnostics / future age-based pruning). */

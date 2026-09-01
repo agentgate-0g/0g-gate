@@ -10,6 +10,17 @@
 
 export const REGISTRY_ABI = [
   {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "router",
+        "type": "address",
+        "internalType": "contract PaymentRouter"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
     "type": "function",
     "name": "MAX_ATTESTATIONS",
     "inputs": [],
@@ -31,6 +42,19 @@ export const REGISTRY_ABI = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "ROUTER",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract PaymentRouter"
       }
     ],
     "stateMutability": "view"
@@ -201,6 +225,16 @@ export const REGISTRY_ABI = [
         "name": "serviceId",
         "type": "uint64",
         "internalType": "uint64"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
       },
       {
         "name": "paymentTxHash",
@@ -570,7 +604,17 @@ export const REGISTRY_ABI = [
   },
   {
     "type": "error",
+    "name": "NoSuchPayment",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NotAuthorized",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SelfPayment",
     "inputs": []
   },
   {
@@ -599,6 +643,11 @@ export const PAYMENT_ROUTER_ABI = [
         "name": "nonce",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [
@@ -719,6 +768,30 @@ export const PAYMENT_ROUTER_ABI = [
 
 export const SPEND_GUARD_ABI = [
   {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "registry",
+        "type": "address",
+        "internalType": "contract AgentGateRegistry"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "REGISTRY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract AgentGateRegistry"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
     "type": "function",
     "name": "debit",
     "inputs": [
@@ -746,11 +819,6 @@ export const SPEND_GUARD_ABI = [
         "name": "paymentRef",
         "type": "bytes32",
         "internalType": "bytes32"
-      },
-      {
-        "name": "trustTier",
-        "type": "uint8",
-        "internalType": "uint8"
       }
     ],
     "outputs": [],
@@ -1200,7 +1268,17 @@ export const SPEND_GUARD_ABI = [
   },
   {
     "type": "error",
+    "name": "WrongPayee",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "ZeroAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroPayTo",
     "inputs": []
   }
 ] as const;

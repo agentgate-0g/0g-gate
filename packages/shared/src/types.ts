@@ -111,7 +111,14 @@ export interface ChainClient {
   getBalance(account: string): Promise<Wei>;
   verifyTransfer(q: VerifyTransferQuery): Promise<VerifyResult>;
   registerService(input: RegisterServiceInput, signer: AnySigner): Promise<{ serviceId: number; txHash: string }>;
-  recordAttestation(input: { serviceId: number; paymentTxHash: string; success: boolean }, signer: AnySigner): Promise<{ txHash: string }>;
+  /**
+   * Attest one served call. `nonce` + `payer` name the PaymentRouter settlement
+   * that paid for it: the registry verifies that settlement exists and refuses
+   * a payer that is the service's own owner or payout address, so a score
+   * cannot be minted without a real arms-length payment. `paymentTxHash` is
+   * carried for display only.
+   */
+  recordAttestation(input: { serviceId: number; nonce: string; payer: string; paymentTxHash: string; success: boolean }, signer: AnySigner): Promise<{ txHash: string }>;
   setActive(serviceId: number, active: boolean, signer: AnySigner): Promise<{ txHash: string }>;
   transfer(input: { to: string; amountWei: Wei; nonce: string; serviceId: number }, signer: AnySigner): Promise<{ txHash: string }>;
 }

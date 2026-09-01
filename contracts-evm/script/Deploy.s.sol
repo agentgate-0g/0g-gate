@@ -12,10 +12,13 @@ import {SpendGuard} from "../src/SpendGuard.sol";
 ///     --rpc-url $ZG_RPC_URL --private-key $DEPLOYER_KEY --broadcast
 contract Deploy is Script {
     function run() external {
+        // Order is load-bearing: the registry verifies attestations against
+        // the router's settlements, and the guard reads the registry's scores
+        // and payout targets. Router -> Registry -> Guard, no cycle.
         vm.startBroadcast();
-        AgentGateRegistry registry = new AgentGateRegistry();
         PaymentRouter router = new PaymentRouter();
-        SpendGuard guard = new SpendGuard();
+        AgentGateRegistry registry = new AgentGateRegistry(router);
+        SpendGuard guard = new SpendGuard(registry);
         vm.stopBroadcast();
 
         console.log("REGISTRY_CONTRACT_ADDRESS=%s", address(registry));

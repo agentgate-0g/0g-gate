@@ -24,3 +24,5 @@ keys/
 # rendered demo video — regenerate from docs/video/pipeline/
 docs/video/*.mp4
 docs/video/*.png
+docs/video/vo/*.mp3
+docs/video/vo/*.wav

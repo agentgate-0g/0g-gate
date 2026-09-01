@@ -554,17 +554,20 @@ export class Live0gClient implements ChainClient {
    * because the caller's own money did not move.
    */
   async recordAttestation(
-    input: { serviceId: number; paymentTxHash: string; success: boolean }, signer: AnySigner,
+    input: { serviceId: number; nonce: string; payer: string; paymentTxHash: string; success: boolean },
+    signer: AnySigner,
   ): Promise<{ txHash: string }> {
     const serviceId = requireServiceId(input.serviceId);
     const paymentTxHash = input.paymentTxHash as Hash;
+    const nonce = BigInt(input.nonce);
+    const payer = normalizeAddress(input.payer) as `0x${string}`;
     const wallet = this.walletFor(signer);
     let hash: Hash;
     try {
       hash = await wallet.writeContract({
         address: this.registry(), abi: REGISTRY_ABI, functionName: 'recordAttestation',
         chain: this.chain, account: wallet.account,
-        args: [serviceId, paymentTxHash, input.success],
+        args: [serviceId, nonce, payer, paymentTxHash, input.success],
       });
     } catch (err) {
       // Measured, not assumed: for an already-mined duplicate this is the path

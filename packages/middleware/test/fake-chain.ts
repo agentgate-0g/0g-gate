@@ -137,7 +137,7 @@ export class FakeChainClient implements ChainClient {
   }
 
   recordAttestation(
-    input: { serviceId: number; paymentTxHash: string; success: boolean },
+    input: { serviceId: number; nonce: string; payer: string; paymentTxHash: string; success: boolean },
     _signer: AnySigner,
   ): Promise<{ txHash: string }> {
     if (this.failAttestations > 0) {

@@ -6,7 +6,11 @@ import type { AgentGateConfig } from '@agentgate/shared';
 import { Live0gClient } from '../src/live-0g';
 import { REGISTRY_ABI } from '../src/abi';
 
-const RPC = 'http://127.0.0.1:8546';
+// Port is overridable: a hardcoded one collides with whatever else the
+// machine happens to be running, and the failure (`balance 0`) looks like a
+// contract bug rather than a busy port.
+const ANVIL_PORT = process.env.ANVIL_PORT_READS ?? '8546';
+const RPC = `http://127.0.0.1:${ANVIL_PORT}`;
 
 /**
  * Anvil's deterministic dev accounts, DERIVED from its public default mnemonic
@@ -28,10 +32,14 @@ let client: Live0gClient;
 let registerBlockTimestampMs: number;
 const account = privateKeyToAccount(DEPLOYER);
 
-function deploy(name: string): `0x${string}` {
+function deploy(name: string, ...ctorArgs: string[]): `0x${string}` {
+  // Router -> Registry(router) -> Guard(registry): the registry verifies
+  // attestations against the router's settlements and the guard reads the
+  // registry's scores, so the constructor args are load-bearing.
   const out = execFileSync('forge', [
     'create', `src/${name}.sol:${name}`,
     '--rpc-url', RPC, '--private-key', DEPLOYER, '--broadcast', '--json',
+    ...(ctorArgs.length ? ['--constructor-args', ...ctorArgs] : []),
   ], { cwd: new URL('../../../contracts-evm', import.meta.url).pathname, encoding: 'utf8' });
   return JSON.parse(out).deployedTo as `0x${string}`;
 }
@@ -46,9 +54,10 @@ function configFor(registry: string): AgentGateConfig {
 }
 
 beforeAll(async () => {
-  anvil = spawn('anvil', ['--port', '8546', '--silent'], { stdio: 'ignore' });
+  anvil = spawn('anvil', ['--port', ANVIL_PORT, '--silent'], { stdio: 'ignore' });
   await new Promise((r) => setTimeout(r, 2000));
-  registryAddress = deploy('AgentGateRegistry');
+  const routerAddress = deploy('PaymentRouter');
+  registryAddress = deploy('AgentGateRegistry', routerAddress);
 
   const wallet = createWalletClient({ account, chain: CHAIN, transport: http(RPC) });
   const pub = createPublicClient({ chain: CHAIN, transport: http(RPC) });

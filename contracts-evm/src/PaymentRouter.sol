@@ -26,13 +26,25 @@ contract PaymentRouter {
         uint64 timestamp // unix MS
     );
 
-    /// keccak(serviceId, nonce) => already paid? On-chain replay guard, in
-    /// addition to the gateway's own single-use invoice burn.
+    /// keccak(serviceId, nonce, payer) => already paid? On-chain replay guard,
+    /// in addition to the gateway's own single-use invoice burn.
+    ///
+    /// The key includes the payer deliberately. Keyed on (serviceId, nonce)
+    /// alone, ANY address could burn ANY invoice for 1 wei — front-run the
+    /// buyer, and their real payment reverts DuplicateNonce with no way to
+    /// re-settle that invoice. Binding the key to msg.sender makes a griefer
+    /// able to burn only their own slot. Two honest payers racing the same
+    /// nonce is harmless: the gateway burns the invoice in its own store before
+    /// it proxies, so only one of them is ever served.
     mapping(bytes32 => bool) public seenNonce;
 
-    /// @notice The `seenNonce` key for a (serviceId, nonce) pair.
-    function nonceKey(uint64 serviceId, uint256 nonce) public pure returns (bytes32) {
-        return keccak256(abi.encode(serviceId, nonce));
+    /// @notice The `seenNonce` key for a (serviceId, nonce, payer) triple.
+    function nonceKey(uint64 serviceId, uint256 nonce, address payer)
+        public
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(serviceId, nonce, payer));
     }
 
     /// @notice Pay a service's 402 invoice. The whole `msg.value` is forwarded
@@ -42,7 +54,7 @@ contract PaymentRouter {
         if (msg.value == 0) revert ZeroAmount();
         if (payTo == address(0)) revert ZeroPayTo();
 
-        bytes32 key = nonceKey(serviceId, nonce);
+        bytes32 key = nonceKey(serviceId, nonce, msg.sender);
         if (seenNonce[key]) revert DuplicateNonce();
 
         // Checks-effects-interactions: burn the nonce before the outbound call.

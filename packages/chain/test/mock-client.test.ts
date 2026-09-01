@@ -1,3 +1,4 @@
+const MOCK_PAYER = '0x0000000000000000000000000000000000000009';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { deriveAccountAddress, startServer } from '@agentgate/devnet';
 import type { RunningServer } from '@agentgate/devnet';
@@ -224,7 +225,7 @@ describe('MockChainHttpClient — full surface against an in-process devnet', ()
 
   it('recordAttestation bumps the score and lists newest first', async () => {
     const result = await chain.recordAttestation(
-      { serviceId, paymentTxHash: txHash, success: true },
+      { serviceId, nonce: '1', payer: MOCK_PAYER, paymentTxHash: txHash, success: true },
       ATTESTOR,
     );
     expect(result.txHash).toMatch(/^0x[0-9a-f]{64}$/);
@@ -232,7 +233,7 @@ describe('MockChainHttpClient — full surface against an in-process devnet', ()
     expect(await chain.getScore(serviceId)).toEqual({ totalCalls: 1, successCalls: 1 });
 
     await chain.recordAttestation(
-      { serviceId, paymentTxHash: 'f'.repeat(64), success: false },
+      { serviceId, nonce: '1', payer: MOCK_PAYER, paymentTxHash: 'f'.repeat(64), success: false },
       OWNER, // owner is also authorized
     );
     expect(await chain.getScore(serviceId)).toEqual({ totalCalls: 2, successCalls: 1 });
@@ -250,7 +251,7 @@ describe('MockChainHttpClient — full surface against an in-process devnet', ()
 
   it('rejects stranger attestations (403)', async () => {
     await expectAgentGateError(
-      chain.recordAttestation({ serviceId, paymentTxHash: '9'.repeat(64), success: true }, STRANGER),
+      chain.recordAttestation({ serviceId, nonce: '1', payer: MOCK_PAYER, paymentTxHash: '9'.repeat(64), success: true }, STRANGER),
       'not_authorized',
       403,
     );
@@ -264,7 +265,7 @@ describe('MockChainHttpClient — full surface against an in-process devnet', ()
     const before = await chain.getScore(serviceId);
 
     const replay = await chain.recordAttestation(
-      { serviceId, paymentTxHash: txHash, success: true },
+      { serviceId, nonce: '1', payer: MOCK_PAYER, paymentTxHash: txHash, success: true },
       ATTESTOR,
     );
     // Empty hash = "nothing submitted, it was already on-chain" (live parity).
@@ -284,7 +285,7 @@ describe('MockChainHttpClient — full surface against an in-process devnet', ()
     expect((await chain.getService(serviceId))?.active).toBe(false);
 
     await expectAgentGateError(
-      chain.recordAttestation({ serviceId, paymentTxHash: '8'.repeat(64), success: true }, ATTESTOR),
+      chain.recordAttestation({ serviceId, nonce: '1', payer: MOCK_PAYER, paymentTxHash: '8'.repeat(64), success: true }, ATTESTOR),
       'service_inactive',
       400,
     );
