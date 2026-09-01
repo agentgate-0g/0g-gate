@@ -53,22 +53,30 @@ Closes three rounds of audit findings. Note the operational consequence: a
 service's attestor may no longer be its owner or its payout address, so seeding
 this registry needs three distinct addresses per service, not one.
 
-**Seeded 2026-09-01.** Two services registered and each taken through a real
-paid call — buyer pays the listed 0.001 OG to the registered payout, the
-third-party attestor scores it — so both read 1/1 and the activity ledger holds
-six on-chain events. Roles are separate by necessity, not preference:
+**Seeded and cut over 2026-09-01.** The hosted gateway now runs this contract
+set. Services 3 and 4 are live and each has taken a real paid call end to end —
+buyer pays 0.001 OG through the router, the gateway serves the wrapped upstream
+and attests the call itself — so both read 1/1.
 
 | Role | Address |
 |---|---|
-| owner | `0x71a89a7e692dAC4d6BD7c3f1cCa9155592d87BaE` (the gate signer) |
-| payout | `0xb5B4A886DA386830392a86288ed91d272dE17746` |
-| attestor | `0xC58C74Ae050dF70F4D11d705b65c297d373Fb004` |
+| service owner + payout | `0xb5B4A886DA386830392a86288ed91d272dE17746` |
+| attestor | `0x71a89a7e692dAC4d6BD7c3f1cCa9155592d87BaE` (the gateway's signer) |
 | buyer | `0x69EcD4f412a130C0cD78BFE1fcDb8BF08F407bd3` |
 
-The three new keys are mode-600 files in `~/.agentgate-{payout,attestor,buyer}.key`
-and are NOT in the repo. `/svc/1` and `/svc/2` do not serve yet — the hosted
-gateway still runs the previous code and knows nothing of these ids; that is the
-cutover, and it is still pending.
+**The attestor must be the gateway's signer, and the owner must not be.** This
+is forced by the audit fix that stopped a seller witnessing its own score, and
+it is not obvious until a live cutover: services 1 and 2 were first registered
+with the gate key as OWNER and a standalone wallet as attestor, which looked
+reasonable and passed every check — then every attestation failed with
+`NotAuthorized`, because the gateway signs with the gate key and the gate key
+was the owner. Services 1 and 2 are deactivated and kept as the record of that.
+
+Seeding therefore needs three addresses, wired this way round: the seller owns
+and is paid, the gateway attests, and the buyer is none of them.
+
+The keys for the seller and buyer wallets are mode-600 files in
+`~/.agentgate-{payout,buyer}.key` and are not in the repo.
 
 ### Original set — still live, still what everything uses
 
