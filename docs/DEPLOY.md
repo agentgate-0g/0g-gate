@@ -2,8 +2,8 @@
 
 > **Target: 0G Galileo Testnet** (chain ID `16602`, native OG, 18 decimals).
 > **Status: deployed and exercised.** The three contracts are live on Galileo —
-> `AgentGateRegistry` `0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA`, `PaymentRouter` `0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB`,
-> `SpendGuard` `0x08b4049802999245888E72D0C31Fb4cA55C30E1B` — and the full seller and buyer paths have been
+> `AgentGateRegistry` `0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1`, `PaymentRouter` `0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F`,
+> `SpendGuard` `0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781` — and the full seller and buyer paths have been
 > run against them. This runbook is the recipe that produced them, kept so the deploy is
 > reproducible on a fresh key.
 >
@@ -44,7 +44,7 @@ cast chain-id --rpc-url https://evmrpc-testnet.0g.ai    # → 16602
 ```bash
 cd contracts-evm
 forge build     # solc 0.8.28, optimizer 200 runs, evm_version = cancun
-forge test      # 42 tests across the three suites, must be green
+forge test      # 77 tests across the five suites, must be green
 ```
 
 Runtime bytecode is well inside EIP-170's 24,576-byte limit for all three (largest is

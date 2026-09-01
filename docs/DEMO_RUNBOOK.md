@@ -73,8 +73,8 @@ npm run build                      # ~13 s, verified clean
 PORT=$(python3 -c "import socket;s=socket.socket();s.bind(('127.0.0.1',0));print(s.getsockname()[1]);s.close()")
 echo "dashboard → http://localhost:$PORT"
 AGENTGATE_MODE=live \
-REGISTRY_CONTRACT_ADDRESS=0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA \
-PAYMENT_ROUTER_ADDRESS=0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB \
+REGISTRY_CONTRACT_ADDRESS=0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1 \
+PAYMENT_ROUTER_ADDRESS=0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F \
 ZG_RPC_URL=https://evmrpc-testnet.0g.ai \
 npm start -w dashboard -- -p $PORT
 ```
@@ -102,20 +102,24 @@ This is the strongest shot in the video **and the only one that can't run as-is 
 ```
 BUYER_SIGNER_KEY   -> NOT SET on this machine
 SELLER_SIGNER_KEY  -> NOT SET on this machine
-GATE_SIGNER_KEY    -> 0x71a89a7e692dAC4d6BD7c3f1cCa9155592d87BaE  (3.44 OG)
+GATE_SIGNER_KEY    -> 0x71a89a7e692dAC4d6BD7c3f1cCa9155592d87BaE  (3.26 OG)
 ```
 
-The gate key **cannot** be the buyer. It is service 1's `payTo`, and
-`packages/middleware/src/app.ts:613` skips attestation when buyer == owner/payout
-(anti wash-trading). A self-buy would be **served but never scored** — the score would visibly
-*not* move, contradicting the pitch mid-take.
+The gate key **cannot** be the buyer. Since the attestor-topology fix it is the registered
+**attestor** for services 3 and 4, and `AgentGateRegistry.sol:247` reverts `SelfPayment` when the
+payer is the service's owner, payout target *or* attestor. The gateway refuses first, at
+`packages/middleware/src/app.ts:623` (`isSelfPayment`), so a self-buy is **served but never
+scored** — the score would visibly *not* move, contradicting the pitch mid-take. The seller
+wallet is barred by the same rule.
 
-### Payout addresses to avoid as buyer
+### Addresses to avoid as buyer
 
-| Service | Price | `payTo` / owner |
-|---|---|---|
-| 1 · USD FX Feed | 0.001 OG | `0x71a89a7e692dac4d6bd7c3f1cca9155592d87bae` |
-| 2 · Crypto Spot Prices | 0.001 OG | `0x4c6165286739696849fb3e77a16b0639d762c5b6` |
+| Role | Address |
+|---|---|
+| owner and `payTo` for services 3 and 4 | `0xb5b4a886da386830392a86288ed91d272de17746` |
+| attestor for services 3 and 4 (the gate signer) | `0x71a89a7e692dac4d6bd7c3f1cca9155592d87bae` |
+
+Services 1 and 2 are deactivated — they carry the old topology and cannot be bought.
 
 ### Setup (~5 minutes, do it the day before)
 
@@ -138,7 +142,7 @@ curl -sS -X POST -H 'content-type: application/json' \
 ```bash
 export BUYER_SIGNER_KEY=$(cat ~/.agentgate-buyer.key)
 clear                                      # scrub the export from the visible scrollback
-npx agentgate-0g buy 2 --max 0.01
+npx agentgate-0g buy 3 --max 0.01
 ```
 
 Cost per take: **0.001 OG + gas**. A 0.1 OG faucet drip funds ~50 rehearsals.
@@ -167,7 +171,7 @@ Say "mock chain" out loud if you use it — do not let it read as on-chain.
 | Dashboard first paint | `npm start -w dashboard` | 13 s build | **1.6 s** | port + prod build (§3) |
 | MCP one-paste | README judges block | — | **8.0 s** | 8 s is `sleep 8` — dead air |
 | Live buy | `npx agentgate-0g buy 2` | — | ~block time | needs funded wallet (§4) |
-| Vitest summary | `npx vitest run` | — | **8.1 s** | 460 passed |
+| Vitest summary | `npx vitest run` | — | **8.1 s** | 463 passed |
 | Foundry summary | `forge test` | — | **~15 ms** | vendor forge-std first |
 
 > The MCP block's 8 s is a literal `sleep 8` holding stdin open. On camera either **cut the wait
@@ -182,12 +186,12 @@ All re-verified against `https://evmrpc-testnet.0g.ai` on 2026-08-31.
 | Claim | Evidence |
 |---|---|
 | Chain | `eth_chainId` → `0x40da` = **16602** (0G Galileo) |
-| `AgentGateRegistry` | [`0x2f5b7AaD…76dA`](https://chainscan-galileo.0g.ai/address/0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA) — 13,702 chars bytecode |
-| `PaymentRouter` | [`0xfA5e4CC7…5FBB`](https://chainscan-galileo.0g.ai/address/0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB) — 1,872 chars |
-| `SpendGuard` | [`0x08b40498…0E1B`](https://chainscan-galileo.0g.ai/address/0x08b4049802999245888E72D0C31Fb4cA55C30E1B) — 8,740 chars |
-| register tx | `0x4e15b95f…2f249` — status **1**, block 52354636 → Registry |
-| pay tx | `0xebee2bc6…2a815` — status **1**, block 52359259 → PaymentRouter |
-| attest tx | `0xd0a24968…a063be` — status **1**, block 52359289 → Registry |
+| `AgentGateRegistry` | [`0x73bf79e3…E4E1`](https://chainscan-galileo.0g.ai/address/0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1) — 18,140 chars bytecode |
+| `PaymentRouter` | [`0xE7C2C116…1B8F`](https://chainscan-galileo.0g.ai/address/0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F) — 1,882 chars |
+| `SpendGuard` | [`0xBb79CaB7…C781`](https://chainscan-galileo.0g.ai/address/0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781) — 12,268 chars |
+| register tx | `0x58525104…85aad0` — status **1**, block 52462409 → Registry |
+| pay tx | `0x5a811b41…923f0bb` — status **1**, block 52462505 → PaymentRouter |
+| attest tx | `0x61828080…074f55` — status **1**, block 52462532 → Registry |
 | Wire scheme | `exact-settled` (NOT x402 `exact`) — visible in the 402 body |
 | Tests | **463** vitest passed, **77** Foundry passed |
 | npm | `agentgate-0g@1.0.4` |

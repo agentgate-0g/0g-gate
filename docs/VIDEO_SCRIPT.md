@@ -22,7 +22,7 @@ Each scene is a self-contained card, recorded separately and joined in the edit:
 **🖥️ LAYAR** — Local dashboard landing page, fullscreen (`DEMO_RUNBOOK.md` §3).
 Hold on the hero: **"Stripe for AI agents on 0G."** Let the typing animation finish the
 `npx agentgate-0g@latest wrap …` line, then slow-pan down to the live stats strip:
-`SERVICES LISTED 2 · PAID CALLS ATTESTED 2 · REVENUE SETTLED 0.002 OG · NETWORK 0g-galileo`.
+`SERVICES LISTED 4 · PAID CALLS ATTESTED 4 · REVENUE SETTLED 0.004 OG · NETWORK 0g-galileo`.
 
 **🎙️ VO (EN)**
 > AI agents can't pay for the APIs they use. No cards, no logins, no accounts.
@@ -55,8 +55,10 @@ npx agentgate-0g@latest list
 Verbatim output — **3.1 s** with npx pre-warmed:
 ```
 ID  NAME                PRICE     TIER  SCORE  ACTIVE  ENDPOINT
-1   USD FX Feed         0.001 OG  new   1/1    yes     https://0g-gateway.mdloglabs.org/svc/1
-2   Crypto Spot Prices  0.001 OG  new   1/1    yes     https://0g-gateway.mdloglabs.org/svc/2
+1   USD FX Feed         0.001 OG  new   1/1    no      https://0g-gateway.mdloglabs.org/svc/1
+2   Crypto Spot Prices  0.001 OG  new   1/1    no      https://0g-gateway.mdloglabs.org/svc/2
+3   USD FX Feed         0.001 OG  new   1/1    yes     https://0g-gateway.mdloglabs.org/svc/3
+4   Crypto Spot Prices  0.001 OG  new   1/1    yes     https://0g-gateway.mdloglabs.org/svc/4
 ```
 
 **🎙️ VO (EN)**
@@ -88,7 +90,7 @@ Verbatim body (<1 s):
 "payTo":"0x71a89a7e692dac4d6bd7c3f1cca9155592d87bae",
 "resource":"https://0g-gateway.mdloglabs.org/svc/1","description":"USD FX Feed",
 "maxTimeoutSeconds":300,"extra":{"nonce":"7973784281089211","serviceId":1,
-"settlement":"0g-payment-router","router":"0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB"}}]}
+"settlement":"0g-payment-router","router":"0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F"}}]}
 ```
 Second run → `"nonce":"302175800610721"`. **Different. That's the point.**
 
@@ -159,15 +161,16 @@ the trust moment.
 
 Verified on screen:
 ```
-EVENTS 7  ·  PAYMENTS 3 (0.003 OG settled)  ·  ATTESTATIONS 2 (100% success 2/2)  ·  SERVICES 2
+EVENTS 15  ·  PAYMENTS 7 (0.007 OG settled)  ·  ATTESTATIONS 4 (100% success 4/4)  ·  SERVICES 4
 NETWORK 0g-galileo · POLLED EVERY 5S · ● LIVE
 
-1h ago  ATTEST ✓  SVC-002  attestation success for service 2      confirmed  0xce166057…3b428f98 ↗
-1h ago  PAYMENT   SVC-002  payment of 0.001 OG to 0x4C6165…c5B6   confirmed  0xe35c9324…91055e92 ↗
-1h ago  REGISTER  SVC-002  service "Crypto Spot Prices" registered confirmed 0x361d9f7d…72e5b92a ↗
-4h ago  ATTEST ✓  SVC-001  attestation success for service 1      confirmed  0xd0a24968…9aa063be ↗
-4h ago  PAYMENT   SVC-001  payment of 0.001 OG to 0x71a89a…7BaE   confirmed  0xebee2bc6…eef2a815 ↗
-5h ago  REGISTER  SVC-001  service "USD FX Feed" registered       confirmed  0x4e15b95f…15b2f249 ↗
+1h ago  ATTEST ✓  SVC-004  attestation success for service 4       confirmed  0x4f4bfa51…67d41c8b ↗
+1h ago  PAYMENT   SVC-004  payment of 0.001 OG to 0xb5B4A8…7746    confirmed  0x689b4209…88afa823 ↗
+1h ago  PAYMENT   SVC-004  payment of 0.001 OG to 0xb5B4A8…7746    confirmed  0xda16c306…e9f853f0 ↗
+1h ago  ATTEST ✓  SVC-003  attestation success for service 3       confirmed  0x61828080…ab074f55 ↗
+1h ago  PAYMENT   SVC-003  payment of 0.001 OG to 0xb5B4A8…7746    confirmed  0x5a811b41…e923f0bb ↗
+1h ago  REGISTER  SVC-004  service "Crypto Spot Prices" registered confirmed  0xe0a4a5e0…1f4cec17 ↗
+1h ago  REGISTER  SVC-003  service "USD FX Feed" registered        confirmed  0x58525104…1b85aad0 ↗
 ```
 
 **🎙️ VO (EN)**
@@ -198,9 +201,12 @@ paste. (b) Cut to the terminal returning the tool result.
 
 Then the tool call result (verified, **8.0 s** — trim the `sleep` in the edit, or use `sleep 3`):
 ```json
-[ { "id": 1, "name": "USD FX Feed", "price": "0.001 OG", "tier": "new",
+[ { "id": 3, "name": "USD FX Feed", "price": "0.001 OG", "tier": "new",
     "score": "1/1", "active": true,
-    "endpoint": "https://0g-gateway.mdloglabs.org/svc/1" }, … ]
+    "endpoint": "https://0g-gateway.mdloglabs.org/svc/3" },
+  { "id": 4, "name": "Crypto Spot Prices", "price": "0.001 OG", "tier": "new",
+    "score": "1/1", "active": true,
+    "endpoint": "https://0g-gateway.mdloglabs.org/svc/4" } ]
 ```
 
 **🎙️ VO (EN)**
@@ -218,13 +224,13 @@ Then the tool call result (verified, **8.0 s** — trim the `sleep` in the edit,
 ## Scene 6 — Honest close · `2:32 – 2:45`
 
 **🖥️ LAYAR** — Title card. Three contract addresses, the repo URL, the npm package. Optionally a
-half-second flash of `460 passed` and `42 tests passed`.
+half-second flash of `463 passed` and `77 tests passed`.
 
 ```
-AgentGateRegistry  0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA
-PaymentRouter      0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB
-SpendGuard         0x08b4049802999245888E72D0C31Fb4cA55C30E1B
-0G Galileo Testnet · chain 16602 · 460 tests · 42 Foundry tests
+AgentGateRegistry  0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1
+PaymentRouter      0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F
+SpendGuard         0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781
+0G Galileo Testnet · chain 16602 · 463 tests · 77 Foundry tests
 github.com/agentgate-0g/0g-gate  ·  npm: agentgate-0g
 ```
 

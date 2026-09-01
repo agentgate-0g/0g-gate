@@ -263,10 +263,10 @@ deploy/          pm2 ecosystem config + systemd unit for the hosted gateway
 | `npm run agentgate -- …` | the `agentgate` CLI |
 | `npm run agent -- --task "…"` | run the buyer agent once |
 | `npm run typecheck` | `tsc --noEmit` in every package + dashboard + root scripts/e2e |
-| `npm test` | vitest: all package units + the e2e loop (460 tests) |
+| `npm test` | vitest: all package units + the e2e loop (463 tests) |
 | `npm run build` | dashboard `next build` |
 
-Contract tests: `cd contracts-evm && forge test` — 42 tests across `AgentGateRegistry` (21), `SpendGuard` (14) and `PaymentRouter` (7). `contracts-evm/lib/` is gitignored and there are no submodules, so a fresh clone vendors forge-std once first: `forge install foundry-rs/forge-std@v1.16.2 --no-git --shallow`. CI does the same, pinned to the same tag.
+Contract tests: `cd contracts-evm && forge test` — 77 tests across `AgentGateRegistry` (37), `SpendGuard` (28), `PaymentRouter` (9), `GasCoupling` (1) and `SybilReputation` (2). `contracts-evm/lib/` is gitignored and there are no submodules, so a fresh clone vendors forge-std once first: `forge install foundry-rs/forge-std@v1.16.2 --no-git --shallow`. CI does the same, pinned to the same tag.
 
 > `packages/chain`'s live-client suites spawn a real `anvil` and deploy the contracts to it, so [Foundry](https://getfoundry.sh) is required for a full `npm test` run — without it those suites fail rather than skip. CI installs it.
 
@@ -276,13 +276,13 @@ Contract tests: `cd contracts-evm && forge test` — 42 tests across `AgentGateR
 
 **Target chain: 0G Galileo Testnet** — chain ID `16602`, RPC `https://evmrpc-testnet.0g.ai`, explorer [chainscan-galileo.0g.ai](https://chainscan-galileo.0g.ai), native token **OG** (18 decimals). Faucet: [faucet.0g.ai](https://faucet.0g.ai) (0.1 OG per wallet per day).
 
-> **Deployed 2026-08-31**, block 52351975. All three are live and verified on-chain, and are wired in as the CLI's built-in defaults — `npx agentgate-0g list` reads this registry with no configuration at all. Total deploy cost **0.0116 OG** (2,899,438 gas at a 4 gwei priority fee).
+> **Deployed 2026-09-01 01:28 UTC**, block 52458928 — all three in a single block. They are live and verified on-chain, and are wired in as the CLI's built-in defaults — `npx agentgate-0g list` reads this registry with no configuration at all. Total deploy cost **0.0152 OG** (3,799,198 gas at a 4 gwei priority fee).
 
 | Artifact | Address |
 |---|---|
-| `AgentGateRegistry` | [`0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA`](https://chainscan-galileo.0g.ai/address/0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA) |
-| `PaymentRouter` | [`0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB`](https://chainscan-galileo.0g.ai/address/0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB) |
-| `SpendGuard` | [`0x08b4049802999245888E72D0C31Fb4cA55C30E1B`](https://chainscan-galileo.0g.ai/address/0x08b4049802999245888E72D0C31Fb4cA55C30E1B) |
+| `AgentGateRegistry` | [`0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1`](https://chainscan-galileo.0g.ai/address/0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1) |
+| `PaymentRouter` | [`0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F`](https://chainscan-galileo.0g.ai/address/0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F) |
+| `SpendGuard` | [`0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781`](https://chainscan-galileo.0g.ai/address/0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781) |
 
 None of the three is upgradable — there is no proxy, so a redeploy is a **new address starting from empty state**. These values are a compatibility surface for every zero-config user, not a config knob.
 
@@ -313,7 +313,7 @@ None of the three is upgradable — there is no proxy, so a redeploy is a **new 
 
 **Shipped**
 
-- Solidity contract suite — `AgentGateRegistry`, `PaymentRouter`, `SpendGuard` (42 Foundry tests)
+- Solidity contract suite — `AgentGateRegistry`, `PaymentRouter`, `SpendGuard` (77 Foundry tests)
 - Native OG rail — payments bound to their invoice by `PaymentRouter`, replay-rejected on-chain
 - On-chain `accepts[]` price list — multi-asset shape stored in the contract
 - Indexer-free chain client — viem view calls + `eth_getLogs`, no API key in the read path

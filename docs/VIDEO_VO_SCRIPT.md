@@ -14,7 +14,8 @@ the pace they imply are listed per scene; anything at or under ~150 wpm is comfo
 ## Scene 1 · `0:00 – 0:18` · 18s · 42 words · 140 wpm
 
 **On screen:** the dashboard landing page. Hero reads "Stripe for AI agents on 0G", then a slow
-pan down to the live stats — 2 services, 2 paid calls attested, 0.002 OG settled, `0g-galileo`.
+pan down to the live stats — 4 services listed, 4 paid calls attested, 0.004 OG settled,
+`0g-galileo`.
 
 > AI agents can't pay for anything. No cards, no logins, no accounts. So today an agent borrows
 > a human's API key — or goes without the data. AgentGate fixes that on 0G: one command turns
@@ -31,7 +32,8 @@ pan down to the live stats — 2 services, 2 paid calls attested, 0.002 OG settl
 ## Scene 2 · `0:18 – 0:40` · 22s · 52 words · 142 wpm
 
 **On screen:** a terminal in `/tmp`. `npx agentgate-0g@latest list` finishes typing at **0:23**;
-the two-row table lands at **0:29**.
+the four-row table lands at **0:29**. Services 1 and 2 read `no` under ACTIVE — they are the
+retired pair, left visible on purpose.
 
 **Cue:** start speaking at 0:18; land "no indexer anywhere" after the table is up.
 
@@ -97,8 +99,8 @@ Say "mock chain" clearly — the caption says it too.
 
 ## Scene 5 · `1:40 – 2:10` · 30s · 68 words · 136 wpm
 
-**On screen:** the dashboard activity ledger. Stat tiles are up from **1:40** — 7 events, 3
-payments, 0.003 OG settled, 2 attestations at 100%. The ledger rows fill the frame by **1:52**.
+**On screen:** the dashboard activity ledger. Stat tiles are up from **1:40** — 15 events, 7
+payments, 0.007 OG settled, 4 attestations at 100%. The ledger rows fill the frame by **1:52**.
 
 > And this is the same system reading 0G back. Every registration, every payment, every
 > attestation — written on-chain, read straight off it. That's why the trust score means
@@ -133,14 +135,14 @@ The result JSON lands at **2:28**.
 
 ---
 
-## Scene 7 · `2:32 – 2:45` · 13s · 29 words · 134 wpm
+## Scene 7 · `2:32 – 2:45` · 13s · 28 words · 129 wpm
 
-**On screen:** the title card — three contract addresses, 460 tests, 42 Foundry tests, the repo
+**On screen:** the title card — three contract addresses, 463 tests, 77 Foundry tests, the repo
 and npm package.
 
 **Cue:** the video ends at 2:45,0. Finish speaking by 2:43 so the last card breathes.
 
-> Contracts, gateway, CLI and SDK are live on 0G Galileo today. Everything you just saw is hosted and live. Try it: npx agentgate-0g list.
+> Contracts, gateway, dashboard, CLI and SDK are all live on 0G Galileo today. Everything you just saw is hosted, not a local build. Try it: npx agentgate-0g list.
 
 **ID:**
 

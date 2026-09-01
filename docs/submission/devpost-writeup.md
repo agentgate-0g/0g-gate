@@ -42,7 +42,7 @@ Green tests are not evidence: one passed for months because a dead import made b
 
 ## What's next for AgentGate
 
-The Galileo deployment landed: `AgentGateRegistry`, `PaymentRouter` and `SpendGuard` are live on chain 16602 (addresses in the README), with the CLI, MCP server and SDK on npm as `agentgate-0g`. The full loop ran between two independent wallets with real OG — register `0x4e15b95f…`, pay `0xebee2bc6…`, attest `0xd0a24968…`. Verify it: `npx agentgate-0g list`. 460 TypeScript and 42 Foundry tests green on main.
+The Galileo deployment landed: `AgentGateRegistry`, `PaymentRouter` and `SpendGuard` are live on chain 16602 (addresses in the README), with the CLI, MCP server and SDK on npm as `agentgate-0g`. The full loop ran between two independent wallets with real OG — register `0x58525104…`, pay `0x5a811b41…`, attest `0x61828080…`. Verify it: `npx agentgate-0g list`. 460 TypeScript and 42 Foundry tests green on main.
 
 Every surface is hosted: the gateway at `0g-gateway.mdloglabs.org` and the dashboard at `agentgate-0g.mdloglabs.org`, both reading that deployment. Mind the `0g-` prefix: without it is an older Casper one.
 

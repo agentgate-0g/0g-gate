@@ -1,14 +1,14 @@
 This Wave AgentGate went live on 0G Galileo Testnet: contracts deployed, CLI and SDK published, and the full pay-per-call loop proven on-chain with real OG.
 
 Deployed to Galileo (chain 16602, native OG):
-- AgentGateRegistry 0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA
-- PaymentRouter 0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB
-- SpendGuard 0x08b4049802999245888E72D0C31Fb4cA55C30E1B
+- AgentGateRegistry 0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1
+- PaymentRouter 0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F
+- SpendGuard 0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781
 
 The full loop ran against that deployment with real OG between two independent wallets — not a rehearsal:
-- register https://chainscan-galileo.0g.ai/tx/0x4e15b95f5b2c91dc1bf9e112ed78c6418f4f954265c43b9d9f7053d415b2f249
-- pay https://chainscan-galileo.0g.ai/tx/0xebee2bc6d95f505445a49caf8051209256abcbbf4e24c1f00194a7e8eef2a815
-- attest https://chainscan-galileo.0g.ai/tx/0xd0a24968f092826fd90e298dc36acb64d193d3b11c6e11dec951b7c49aa063be
+- register https://chainscan-galileo.0g.ai/tx/0x5852510418fcced200573652b0e6c80c96ca5a877a543d29fbdf5b131b85aad0
+- pay https://chainscan-galileo.0g.ai/tx/0x5a811b419403d1e8607c45f5f1f91cb7999bb72e203b04afe9c8708ce923f0bb
+- attest https://chainscan-galileo.0g.ai/tx/0x618280801950a7a5d74a715d9d38112989914b7c31c7deee8cfb8950ab074f55
 
 Try it with no keys and no setup:
   npx agentgate-0g@latest list
@@ -17,7 +17,7 @@ Try it with no keys and no setup:
 Shipped:
 - CLI, MCP server and SDK published to npm as agentgate-0g (now 1.0.3): https://www.npmjs.com/package/agentgate-0g — reads need no key, no config and no API key: every read is a plain public-RPC call — view calls, plus eth_getLogs for history.
 - Gateway live at https://0g-gateway.mdloglabs.org, serving 402 invoices priced from the contract's on-chain accepts[] list.
-- Repo: https://github.com/agentgate-0g/0g-gate — CI green, 460 TypeScript tests and 42 Foundry tests.
+- Repo: https://github.com/agentgate-0g/0g-gate — CI green, 463 TypeScript tests and 77 Foundry tests.
 
 Engineering notes worth reporting honestly:
 - Binding a payment to an invoice. A native transfer carries no reference to what it pays for, so a tx hash alone cannot prove which invoice was settled — one payment could be replayed across many calls. PaymentRouter.pay(serviceId, nonce, payTo) forwards msg.value without ever custodying funds and emits an indexed Paid event, so verification is one receipt lookup matched on both service and nonce, and the gateway burns the nonce once it serves.

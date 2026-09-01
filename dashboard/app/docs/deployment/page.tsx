@@ -529,7 +529,7 @@ export default function DeploymentPage() {
             'Contract deployment',
             <span key="s">
               <strong className="text-white">Done.</strong> All three are broadcast to 0G Galileo
-              and pass 42 <M>forge test</M> cases; the seller and buyer paths have been run against
+              and pass 77 <M>forge test</M> cases; the seller and buyer paths have been run against
               them end to end. See{' '}
               <DocLink href="/docs/contract#build-deploy">Contract → Build and deploy</DocLink>.
             </span>,

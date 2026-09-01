@@ -82,14 +82,14 @@ The keys for the seller and buyer wallets are mode-600 files in
 
 | Contract | Address | Explorer |
 |---|---|---|
-| `AgentGateRegistry` | `0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA` | [explorer](https://chainscan-galileo.0g.ai/address/0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA) |
-| `PaymentRouter` | `0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB` | [explorer](https://chainscan-galileo.0g.ai/address/0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB) |
-| `SpendGuard` | `0x08b4049802999245888E72D0C31Fb4cA55C30E1B` | [explorer](https://chainscan-galileo.0g.ai/address/0x08b4049802999245888E72D0C31Fb4cA55C30E1B) |
+| `AgentGateRegistry` | `0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1` | [explorer](https://chainscan-galileo.0g.ai/address/0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1) |
+| `PaymentRouter` | `0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F` | [explorer](https://chainscan-galileo.0g.ai/address/0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F) |
+| `SpendGuard` | `0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781` | [explorer](https://chainscan-galileo.0g.ai/address/0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781) |
 
-Deployed 2026-08-31 to 0G Galileo Testnet (chain 16602) in block 52351975.
-Total cost 0.0116 OG (2,899,438 gas at a 4 gwei priority fee). Bytecode verified
-live with `cast code`: 6,850 / 935 / 4,369 bytes, matching `forge build --sizes`
-exactly.
+Deployed 2026-09-01 to 0G Galileo Testnet (chain 16602) in block 52458928 —
+all three in a single block. Total cost 0.0152 OG (3,799,198 gas at a 4 gwei
+priority fee). Bytecode verified live with `eth_getCode`: 9,069 / 940 / 6,133
+bytes, matching `forge build --sizes` exactly.
 
 These addresses are also the CLI's built-in defaults
 (`packages/shared/src/config.ts`), which is what lets the published package read
@@ -98,17 +98,18 @@ the registry with no configuration.
 ## Proven on-chain
 
 The full loop — register → 402 → pay → serve → attest → score — ran against
-this deployment on 2026-08-31. Not a rehearsal: real transactions, a real
+this deployment on 2026-09-01. Not a rehearsal: real transactions, a real
 third-party upstream, real OG moving between two independent wallets.
 
 | Step | Transaction |
 |---|---|
-| `registerService` — service #1 "USD FX Feed" @ 0.001 OG | [`0x4e15b95f…`](https://chainscan-galileo.0g.ai/tx/0x4e15b95f5b2c91dc1bf9e112ed78c6418f4f954265c43b9d9f7053d415b2f249) |
-| `PaymentRouter.pay(1, nonce, payTo)` — the buyer settling its own invoice | [`0xebee2bc6…`](https://chainscan-galileo.0g.ai/tx/0xebee2bc6d95f505445a49caf8051209256abcbbf4e24c1f00194a7e8eef2a815) |
-| `recordAttestation` — written by the gateway after serving | [`0xd0a24968…`](https://chainscan-galileo.0g.ai/tx/0xd0a24968f092826fd90e298dc36acb64d193d3b11c6e11dec951b7c49aa063be) |
+| `registerService` — service #3 "USD FX Feed" @ 0.001 OG | [`0x58525104…`](https://chainscan-galileo.0g.ai/tx/0x5852510418fcced200573652b0e6c80c96ca5a877a543d29fbdf5b131b85aad0) |
+| `PaymentRouter.pay(3, nonce, payTo)` — the buyer settling its own invoice | [`0x5a811b41…`](https://chainscan-galileo.0g.ai/tx/0x5a811b419403d1e8607c45f5f1f91cb7999bb72e203b04afe9c8708ce923f0bb) |
+| `recordAttestation` — written by the gateway after serving | [`0x61828080…`](https://chainscan-galileo.0g.ai/tx/0x618280801950a7a5d74a715d9d38112989914b7c31c7deee8cfb8950ab074f55) |
 
-Resulting state: `servicesCount() == 1`, score `(1, 1)`, one attestation whose
-`paymentTxHash` is the payment above.
+Resulting state: `servicesCount() == 4`, service #3 scored `(1, 1)`, its
+attestation keyed to the payment above. Services #1 and #2 are the retired pair
+from before the attestor topology was corrected; they are deactivated.
 
 Two details worth noting, because they are what makes the score meaningful:
 
@@ -142,7 +143,7 @@ size-related deploy risk.
 
 ```bash
 cd contracts-evm
-forge test          # 42 tests across 3 suites, all passing
+forge test          # 77 tests across 5 suites, all passing
 forge test -vvv      # verbose output, useful on failure
 ```
 

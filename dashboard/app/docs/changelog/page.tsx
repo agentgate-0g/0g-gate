@@ -16,6 +16,47 @@ export default function Page() {
         lede="Notable changes to AgentGate — the CLI, gateway, smart contracts and docs — newest first."
       />
 
+      <H2 id="2026-09-01-v104">2026-09-01 — v1.0.4: the audited set is the live one</H2>
+      <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-6 text-mut">
+        <li>
+          <strong className="text-white">Cut over to the audited contracts.</strong> The CLI, the
+          gateway and this dashboard now all read{' '}
+          <M>0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1</M>. The ABIs differ from the first
+          deployment, so the three had to switch together — a client on the new ABI reading the old
+          registry decodes a shifted <M>Service</M> struct and fails on a field it never asks about.
+          The new registry started from empty state, so the catalog was re-seeded rather than
+          migrated: no reputation carries across a redeploy, by design.
+        </li>
+        <li>
+          <strong className="text-white">The attestor is the gateway, not the seller.</strong> The
+          first services registered here named the gate key as <em>owner</em> and a standalone
+          address as attestor, while the gateway signs attestations with the gate key — so every
+          attestation reverted <M>NotAuthorized</M> and nothing could score. Services 1 and 2 are
+          deactivated and 3 and 4 replace them with the seller owning and being paid, and the
+          gateway&rsquo;s signer as the registered attestor. No test caught this: the topology is
+          deployment configuration, not code.
+        </li>
+        <li>
+          <strong className="text-white">Escrowed debits settle through the router.</strong>{' '}
+          <M>SpendGuard.debit</M> paid the payee directly, which meant a guard-funded call produced
+          no <M>settledAmount</M> entry and therefore could never be attested. It now settles via{' '}
+          <M>PaymentRouter.pay</M>, so an escrow payment scores exactly like a direct one.
+        </li>
+        <li>
+          <strong className="text-white">The activity ledger stopped going blank.</strong> The
+          lookback was 50,000 blocks, which reads as a comfortable window until you measure 0G
+          Galileo at roughly half a second a block — 6.9 hours, so a demo recorded the previous
+          evening showed an empty page. The default is now 1,000,000 blocks, and the empty state
+          says which window it searched instead of claiming there is no activity at all.
+        </li>
+        <li>
+          <strong className="text-white">A new seller can no longer register an unscorable
+          service.</strong> Registering with the seller&rsquo;s own key as attestor produces a
+          service whose every attestation is barred as a self-payment — served forever, scored
+          never. The path now refuses it at registration rather than at the first sale.
+        </li>
+      </ul>
+
       <H2 id="2026-08-31-v103">2026-08-31 — v1.0.3: the library half of the package actually works</H2>
       <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-6 text-mut">
         <li>
@@ -153,18 +194,17 @@ export default function Page() {
           <M>0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1</M> (registry),{' '}
           <M>0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F</M> (router) and{' '}
           <M>0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781</M> (spend guard), block 52458928.{' '}
-          <strong className="text-white">Not yet cut over:</strong> the CLI, the gateway and this
-          dashboard still read the original set below. The ABIs differ, so the contracts and the
-          gateway have to switch together, and the new registry starts from empty state — no
-          service and no reputation carries across.
+          <strong className="text-white">Cut over in v1.0.4</strong> — at the time of this release
+          the CLI, the gateway and this dashboard still read the original set below.
         </li>
         <li>
           <strong className="text-white">Deployed and exercised on Galileo.</strong>{' '}
           <M>AgentGateRegistry</M> at <M>0x2f5b7AaD7bffcEc5B6cda95Af4439494C1D576dA</M>,{' '}
           <M>PaymentRouter</M> at <M>0xfA5e4CC796390Cdca78C6E34664FE77Be1475FBB</M>,{' '}
           <M>SpendGuard</M> at <M>0x08b4049802999245888E72D0C31Fb4cA55C30E1B</M>. The full seller
-          and buyer paths have been run against them end to end — register, map, 402 invoice, pay,
-          replay with the payment proof, attest — and the dashboard reads that same chain state.
+          and buyer paths were run against them end to end — register, map, 402 invoice, pay,
+          replay with the payment proof, attest. Superseded by the audited set in v1.0.4; these
+          addresses are kept as history and nothing reads them now.
         </li>
         <li>
           <strong className="text-white">Published as <M>agentgate-0g</M>.</strong> The 0G line is a

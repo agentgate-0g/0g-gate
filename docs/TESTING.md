@@ -44,7 +44,7 @@ attest → score, with TTL + inactive paths).
 **Smart contracts** (Solidity, Foundry — no node needed):
 
 ```bash
-cd contracts-evm && forge test        # 42 tests across the three suites
+cd contracts-evm && forge test        # 77 tests across the five suites
 ```
 
 Covered: registration validation (empty/whitespace name, sub-floor price, empty `accepts`),
@@ -201,7 +201,7 @@ AGENTGATE_MODE=live REGISTRY_CONTRACT_ADDRESS=0x… npx tsx scripts/smoke-live-r
 |---|---|
 | `npm run typecheck` | clean, exit 0 |
 | `npm test` | 423 passed (31 files) |
-| `cd contracts-evm && forge test` | 42 passed |
+| `cd contracts-evm && forge test` | 77 passed |
 | `npm run demo` | exit 0; payment + attestation tx hashes + score `1/1` |
 | `npm run dev:seed` + dashboard | catalog populated; `/svc/1` → 402; `/activity` has events |
 | Live dashboard `/api/services` | `"network":"0g-galileo"`, service `(1,1)` |

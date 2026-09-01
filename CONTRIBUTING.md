@@ -37,7 +37,7 @@ npm run typecheck   # all workspaces + root
 If you changed a contract, also run its tests:
 
 ```bash
-cd contracts-evm && forge test    # 42 tests across the three suites
+cd contracts-evm && forge test    # 77 tests across the five suites
 ```
 
 See `contracts-evm/README.md` for the Foundry setup and the deploy procedure.

@@ -372,7 +372,7 @@ export default function InstallationPage() {
       <Callout tone="ok" title="Install verified">
         Green <M>npm test</M>, a clean <M>npm run typecheck</M>, and a <M>npm run demo</M> that
         exits 0 with two transaction hashes confirm the install is healthy. Also run the contract
-        tests: <M>cd contracts-evm &amp;&amp; forge test</M> (42 tests across the three suites).
+        tests: <M>cd contracts-evm &amp;&amp; forge test</M> (77 tests across the five suites).
       </Callout>
 
       <NextLinks
