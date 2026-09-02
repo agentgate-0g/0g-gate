@@ -1,7 +1,13 @@
-# Trim the Vercel upload: the dashboard build needs the root manifests, the
-# workspace package.json files, dashboard/, packages/shared and packages/chain.
-# Everything below is never read by `npm run build -w dashboard`.
-contracts
+# Trim the Vercel upload. The dashboard build needs the root manifests, every
+# workspace package.json (npm resolves the whole workspace graph from the repo
+# root even when only dashboard/ is built), dashboard/, packages/shared and
+# packages/chain. Everything below is never read by `next build`.
+#
+# NOTE: this said `contracts` for its whole life, and the directory is
+# `contracts-evm` — the pattern never matched, so the Foundry project was
+# uploaded on every deploy. The ABI the dashboard reads is checked in at
+# packages/chain/src/abi.ts, so nothing here is needed at build time.
+contracts-evm
 logs
 e2e
 .dockerignore
