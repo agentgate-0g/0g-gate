@@ -10,6 +10,8 @@ import {
   DEFAULT_PAYMENT_ROUTER_ADDRESS,
   DEFAULT_REGISTRY_ADDRESS,
   DEFAULT_ZG_RPC_URL,
+  NETWORK_PROFILES,
+  MAX_INVOICE_TTL_MS,
   MOCK_PAYMENT_ROUTER_ADDRESS,
   loadConfig,
 } from '../src/index';
@@ -259,5 +261,101 @@ describe('hosted default URLs point at the 0G deployment', () => {
         expect(`${name}=${url}`).not.toMatch(host);
       }
     }
+  });
+});
+
+/**
+ * Chain identity is a TUPLE, not five independent knobs. Before profiles there
+ * was no notion of "environment" at all — `live` simply meant Galileo testnet,
+ * every chain value defaulted to it, and an operator who repointed ZG_RPC_URL at
+ * mainnet and forgot the rest got a client that read a testnet address on
+ * mainnet and paid real OG into it.
+ */
+describe('network profiles', () => {
+  const live = (over: Record<string, string> = {}) =>
+    loadConfig({
+      AGENTGATE_MODE: 'live',
+      AGENTGATE_ADMIN_TOKEN: 'a-strong-unique-token',
+      GATE_SIGNER_KEY: `0x${'ab'.repeat(32)}`,
+      ...over,
+    });
+
+  it('defaults to galileo, so the zero-config read path is unchanged', () => {
+    const cfg = live();
+    expect(cfg.zgChainId).toBe(DEFAULT_ZG_CHAIN_ID);
+    expect(cfg.zgNetwork).toBe(DEFAULT_ZG_NETWORK);
+    expect(cfg.registryContractAddress).toBe(DEFAULT_REGISTRY_ADDRESS);
+    expect(cfg.paymentRouterAddress).toBe(DEFAULT_PAYMENT_ROUTER_ADDRESS);
+  });
+
+  it('selecting mainnet moves the WHOLE tuple, never a mix of two networks', () => {
+    const cfg = live({ ZG_NETWORK_PROFILE: 'mainnet' });
+    expect(cfg.zgChainId).toBe(16661);
+    expect(cfg.zgRpcUrl).toBe('https://evmrpc.0g.ai');
+    expect(cfg.zgNetwork).toBe('0g-mainnet');
+    // The critical property: no testnet address survives the switch.
+    expect(cfg.registryContractAddress).not.toBe(DEFAULT_REGISTRY_ADDRESS);
+    expect(cfg.paymentRouterAddress).not.toBe(DEFAULT_PAYMENT_ROUTER_ADDRESS);
+  });
+
+  it('mainnet carries no contract addresses, so it fails closed until deployed', () => {
+    const cfg = live({ ZG_NETWORK_PROFILE: 'mainnet' });
+    expect(cfg.registryContractAddress).toBe('');
+    expect(cfg.paymentRouterAddress).toBe('');
+    expect(cfg.spendGuardAddress).toBe('');
+  });
+
+  it('rejects an unknown profile by name instead of quietly using testnet', () => {
+    expect(() => live({ ZG_NETWORK_PROFILE: 'maiinet' })).toThrow(/unknown ZG_NETWORK_PROFILE/);
+  });
+
+  it('every profile is internally consistent: distinct chain id, rpc and explorer', () => {
+    const seen = new Set<number>();
+    for (const [name, p] of Object.entries(NETWORK_PROFILES)) {
+      expect(seen.has(p.chainId), `${name} reuses chain id ${p.chainId}`).toBe(false);
+      seen.add(p.chainId);
+      expect(p.network, `${name} has no network name`).not.toBe('');
+      expect(p.rpcUrl).toMatch(/^https:\/\//);
+      expect(p.explorerUrl).toMatch(/^https:\/\//);
+    }
+  });
+});
+
+describe('redemption window', () => {
+  it('must not be shorter than the invoice TTL', () => {
+    // Otherwise a payment made against a still-valid invoice could never be
+    // collected — the exact shape of the bug this window exists to close.
+    expect(() =>
+      loadConfig({ INVOICE_TTL_MS: '300000', INVOICE_REDEMPTION_WINDOW_MS: '1000' }),
+    ).toThrow(/must be >= INVOICE_TTL_MS/);
+  });
+
+  it('defaults generously, because being too short costs a buyer their money', () => {
+    expect(loadConfig({}).invoiceRedemptionWindowMs).toBe(86_400_000);
+  });
+});
+
+/**
+ * A coupling between an operator-settable env var and an IMMUTABLE on-chain
+ * constant. AgentGateRegistry delays payout-target and price changes by
+ * TERMS_CHANGE_DELAY_MS (15 min) so a buyer mid-payment cannot have the terms
+ * moved under them. That only holds while the gateway's worst-case staleness —
+ * one service-cache lifetime plus one invoice lifetime — stays under the delay.
+ * The contract can never be changed to catch up, so the env var is what has to
+ * be bounded.
+ */
+describe('invoice TTL is bounded by the on-chain terms-change delay', () => {
+  it('refuses a TTL that would outlive the delay', () => {
+    expect(() => loadConfig({ INVOICE_TTL_MS: String(20 * 60 * 1000) })).toThrow(/INVOICE_TTL_MS/);
+  });
+
+  it('the cap leaves room for the service cache plus a margin', () => {
+    const TERMS_CHANGE_DELAY_MS = 15 * 60 * 1000; // AgentGateRegistry constant
+    const SERVICE_CACHE_TTL_MS = 60_000;          // middleware ServiceCache
+    expect(MAX_INVOICE_TTL_MS + SERVICE_CACHE_TTL_MS).toBeLessThan(TERMS_CHANGE_DELAY_MS);
+  });
+
+  it('still accepts the shipped default', () => {
+    expect(loadConfig({ INVOICE_TTL_MS: '300000' }).invoiceTtlMs).toBe(300_000);
   });
 });

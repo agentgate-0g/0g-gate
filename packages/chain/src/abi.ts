@@ -1,11 +1,13 @@
 /**
- * Contract ABIs for the 0G Galileo deployment.
+ * Contract ABIs for the 0G deployment.
  *
- * GENERATED from contracts-evm/out/*.json — regenerate with the snippet in
- * docs/superpowers/plans/2026-08-30-0g-galileo-migration.md Task 9 whenever a
- * contract entrypoint changes. `as const` is required: viem derives its
- * argument and return types from the literal tuple, so a widened `Abi` would
- * silently degrade every call to `unknown`.
+ * GENERATED — do not edit by hand. Run `npm run gen:abi` whenever a contract
+ * entrypoint, event or struct changes; a stale ABI does not throw, it decodes
+ * at the wrong offsets and returns convincing nonsense.
+ *
+ * `as const` is required: viem derives its argument and return types from the
+ * literal tuple, so a widened `Abi` would silently degrade every call to
+ * `unknown`.
  */
 
 export const REGISTRY_ABI = [
@@ -48,6 +50,19 @@ export const REGISTRY_ABI = [
   },
   {
     "type": "function",
+    "name": "MAX_PAYMENT_OPTIONS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MIN_PRICE_WEI",
     "inputs": [],
     "outputs": [
@@ -71,6 +86,32 @@ export const REGISTRY_ABI = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "TERMS_CHANGE_DELAY_MS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "acceptOwnership",
+    "inputs": [
+      {
+        "name": "serviceId",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -163,7 +204,7 @@ export const REGISTRY_ABI = [
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "out",
         "type": "tuple",
         "internalType": "struct AgentGateRegistry.Service",
         "components": [
@@ -220,12 +261,42 @@ export const REGISTRY_ABI = [
             ]
           },
           {
+            "name": "acceptsEffectiveAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "previousNativePrice",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
             "name": "paymentTarget",
             "type": "address",
             "internalType": "address"
           },
           {
+            "name": "pendingPaymentTarget",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "paymentTargetEffectiveAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "previousPaymentTarget",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
             "name": "owner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "pendingOwner",
             "type": "address",
             "internalType": "address"
           },
@@ -426,6 +497,56 @@ export const REGISTRY_ABI = [
   },
   {
     "type": "function",
+    "name": "setAccepts",
+    "inputs": [
+      {
+        "name": "serviceId",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "accepts",
+        "type": "tuple[]",
+        "internalType": "struct AgentGateRegistry.PaymentOption[]",
+        "components": [
+          {
+            "name": "asset",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "decimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "symbol",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "name",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "version",
+            "type": "string",
+            "internalType": "string"
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setActive",
     "inputs": [
       {
@@ -453,6 +574,42 @@ export const REGISTRY_ABI = [
       },
       {
         "name": "attestor",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setGatewayBaseUrl",
+    "inputs": [
+      {
+        "name": "serviceId",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "url",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setPaymentTarget",
+    "inputs": [
+      {
+        "name": "serviceId",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "newTarget",
         "type": "address",
         "internalType": "address"
       }
@@ -523,6 +680,24 @@ export const REGISTRY_ABI = [
     "stateMutability": "view"
   },
   {
+    "type": "function",
+    "name": "transferOwnership",
+    "inputs": [
+      {
+        "name": "serviceId",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
     "type": "event",
     "name": "AttestationRecorded",
     "inputs": [
@@ -537,6 +712,18 @@ export const REGISTRY_ABI = [
         "type": "bytes32",
         "indexed": true,
         "internalType": "bytes32"
+      },
+      {
+        "name": "payer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       },
       {
         "name": "success",
@@ -561,6 +748,63 @@ export const REGISTRY_ABI = [
   },
   {
     "type": "event",
+    "name": "ServiceAcceptsChanged",
+    "inputs": [
+      {
+        "name": "serviceId",
+        "type": "uint64",
+        "indexed": true,
+        "internalType": "uint64"
+      },
+      {
+        "name": "accepts",
+        "type": "tuple[]",
+        "indexed": false,
+        "internalType": "struct AgentGateRegistry.PaymentOption[]",
+        "components": [
+          {
+            "name": "asset",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "decimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "symbol",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "name",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "version",
+            "type": "string",
+            "internalType": "string"
+          }
+        ]
+      },
+      {
+        "name": "effectiveAt",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "ServiceAttestorChanged",
     "inputs": [
       {
@@ -574,6 +818,100 @@ export const REGISTRY_ABI = [
         "type": "address",
         "indexed": false,
         "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ServiceGatewayBaseUrlChanged",
+    "inputs": [
+      {
+        "name": "serviceId",
+        "type": "uint64",
+        "indexed": true,
+        "internalType": "uint64"
+      },
+      {
+        "name": "gatewayBaseUrl",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ServiceOwnershipTransferStarted",
+    "inputs": [
+      {
+        "name": "serviceId",
+        "type": "uint64",
+        "indexed": true,
+        "internalType": "uint64"
+      },
+      {
+        "name": "from",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ServiceOwnershipTransferred",
+    "inputs": [
+      {
+        "name": "serviceId",
+        "type": "uint64",
+        "indexed": true,
+        "internalType": "uint64"
+      },
+      {
+        "name": "from",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ServicePaymentTargetChanged",
+    "inputs": [
+      {
+        "name": "serviceId",
+        "type": "uint64",
+        "indexed": true,
+        "internalType": "uint64"
+      },
+      {
+        "name": "paymentTarget",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "effectiveAt",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
       }
     ],
     "anonymous": false
@@ -725,6 +1063,11 @@ export const REGISTRY_ABI = [
   {
     "type": "error",
     "name": "ServiceNotFound",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TooManyOptions",
     "inputs": []
   },
   {
@@ -890,6 +1233,19 @@ export const SPEND_GUARD_ABI = [
   },
   {
     "type": "function",
+    "name": "MAX_CALLS_IN_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_TRUST_TIER",
     "inputs": [],
     "outputs": [
@@ -1022,11 +1378,6 @@ export const SPEND_GUARD_ABI = [
             "internalType": "uint8"
           },
           {
-            "name": "restrictToAllowlist",
-            "type": "bool",
-            "internalType": "bool"
-          },
-          {
             "name": "paused",
             "type": "bool",
             "internalType": "bool"
@@ -1093,11 +1444,6 @@ export const SPEND_GUARD_ABI = [
         "name": "minTrustTier",
         "type": "uint8",
         "internalType": "uint8"
-      },
-      {
-        "name": "restrictToAllowlist",
-        "type": "bool",
-        "internalType": "bool"
       }
     ],
     "outputs": [
@@ -1206,6 +1552,29 @@ export const SPEND_GUARD_ABI = [
         "name": "allowed",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "withdraw",
+    "inputs": [
+      {
+        "name": "policyId",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [],
@@ -1411,6 +1780,12 @@ export const SPEND_GUARD_ABI = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
       },
       {
         "name": "remaining",

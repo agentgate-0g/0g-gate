@@ -13,6 +13,7 @@ import { rateLimit } from 'express-rate-limit';
 import {
   AgentGateError,
   buildSelfMapMessage,
+  buildPaymentProofMessage,
   createLogger,
   decodeXPayment,
   encodeXPaymentResponse,
@@ -123,7 +124,21 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 /**
- * A payer that is the service owner or its payout account is wash-trading.
+ * A payer that is the service owner, its payout account, or its ATTESTOR is
+ * wash-trading.
+ *
+ * This list must match AgentGateRegistry.recordAttestation's SelfPayment revert
+ * exactly. It did not: the contract has always rejected `payer == s.attestor`
+ * too (the witness is as interested a party as the owner — otherwise the
+ * attestor pays itself and signs off on it, a two-call loop needing no sybil at
+ * all), while this function checked only owner and paymentTarget.
+ *
+ * The consequence was not a security hole but a silent, permanent one-way loss:
+ * an attestor-paid call was served, then enqueued for attestation, then reverted
+ * SelfPayment on-chain forever. The queue retried it on every boot and the
+ * seller lost the reputation point for a call they really did serve. Any guard
+ * the gateway applies more narrowly than the contract turns into an
+ * unattestable call, so these two lists have to move together.
  *
  * `sameAddress` matches only well-formed `0x<40hex>` pairs, so this fires in
  * BOTH modes: live identities come from the contract, and mock identities are
@@ -132,7 +147,33 @@ function safeEqual(a: string, b: string): boolean {
  * was silently a no-op on the demo path.)
  */
 export function isSelfPayment(payer: string, service: ServiceRecord): boolean {
-  return sameAddress(payer, service.owner) || sameAddress(payer, service.paymentTarget);
+  return (
+    sameAddress(payer, service.owner) ||
+    sameAddress(payer, service.paymentTarget) ||
+    sameAddress(payer, service.attestor)
+  );
+}
+
+/** An AgentGateError's code, so /readyz can say WHY it is not ready. */
+function errorCodeOf(err: unknown): string {
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === 'string' ? code : 'chain_unreachable';
+}
+
+/**
+ * The chain id the NODE reports, when the client can tell us. Optional on the
+ * ChainClient surface, so a mock/injected client simply reports null rather
+ * than forcing every fake to grow a method.
+ */
+async function chainIdOf(chain: ChainClient): Promise<number | null> {
+  const probe = (chain as { observedChainId?: () => Promise<number> }).observedChainId;
+  return typeof probe === 'function' ? probe.call(chain) : null;
+}
+
+/** Invoice count when the store exposes one (both shipped stores do). */
+function invoiceCount(store: InvoiceStore): number | null {
+  const size = (store as { size?: unknown }).size;
+  return typeof size === 'number' ? size : null;
 }
 
 /** Express 4 does not catch async handler rejections — wrap them. */
@@ -202,8 +243,8 @@ export function createApp(deps: MiddlewareDeps): Express {
   const invoices =
     deps.invoiceStore ??
     (deps.invoiceStorePath !== undefined && deps.invoiceStorePath.trim() !== ''
-      ? new FileInvoiceStore(deps.invoiceStorePath)
-      : new MemoryInvoiceStore());
+      ? new FileInvoiceStore(deps.invoiceStorePath, undefined, config.invoiceRedemptionWindowMs)
+      : new MemoryInvoiceStore(undefined, config.invoiceRedemptionWindowMs));
   const ownsInvoiceStore = deps.invoiceStore === undefined;
   // Durable when a path is configured (F7), else in-memory. Owned queues (not
   // injected) are closed on dispose.
@@ -466,9 +507,60 @@ export function createApp(deps: MiddlewareDeps): Express {
       try {
         if (chain.ping) await chain.ping();
         res.json({ ready: true, network: chain.network });
-      } catch {
-        res.status(503).json({ ready: false });
+      } catch (err) {
+        // Say WHY. A gateway that is up but pointed at the wrong chain, or whose
+        // contracts have no code on it, used to be indistinguishable from a
+        // healthy one — chain.ping() now asserts both, so surface the reason
+        // rather than a bare `ready: false` an operator cannot act on.
+        res.status(503).json({ ready: false, reason: errorCodeOf(err) });
       }
+    }),
+  );
+
+  /**
+   * Operational metrics for the MONEY path.
+   *
+   * There was previously no way to learn that payments had stopped settling:
+   * `/healthz` returned `{ok:true}` unconditionally and `/readyz` only proved
+   * the node answered. A gate signer out of gas, a queue that had stopped
+   * draining, or a wrong-chain boot all looked exactly like a healthy gateway,
+   * and attestations are fire-and-forget so nothing surfaced in a response
+   * either. Every field here is something that, when it moves the wrong way,
+   * means a seller is losing reputation or a buyer is about to lose money.
+   *
+   * Unauthenticated on purpose — it exposes no secrets and no buyer data, and
+   * a probe that needs a credential is a probe that does not get wired up. The
+   * signer ADDRESS is already public in every attestation on-chain.
+   */
+  app.get(
+    '/metrics',
+    wrap(async (_req, res) => {
+      const queue = await attestations.stats().catch(() => null);
+      // Balance is the one field that needs the chain; never let it fail the
+      // whole endpoint, or the outage hides the other signals too.
+      let signerBalanceWei: string | null = null;
+      if (gatewayAttestor !== '') {
+        signerBalanceWei = await chain.getBalance(gatewayAttestor).catch(() => null);
+      }
+      let observedChainId: number | null = null;
+      try {
+        observedChainId = await chainIdOf(chain);
+      } catch {
+        observedChainId = null;
+      }
+      res.json({
+        network: chain.network,
+        // What the node ACTUALLY reports, not what we were configured with —
+        // the whole point is to catch a disagreement between the two.
+        observedChainId,
+        attestor: gatewayAttestor,
+        // Denominated in wei; the gateway pays gas for one recordAttestation
+        // per served call and earns nothing, so this only ever goes down.
+        signerBalanceWei,
+        attestationQueue: queue,
+        invoicesHeld: invoiceCount(invoices),
+        upstreamsMapped: Object.keys(upstreams.list()).length,
+      });
     }),
   );
 
@@ -570,7 +662,14 @@ export function createApp(deps: MiddlewareDeps): Express {
       const invoice = await invoices.get(nonceHeader);
       if (!invoice || invoice.serviceId !== id) { await respond402Fresh(res, service, resource, 'unknown_nonce'); return; }
       if (invoice.used) { await respond402Fresh(res, service, resource, 'invoice_used'); return; }
-      if (Date.now() > invoice.expiresAt) { await respond402Fresh(res, service, resource, 'invoice_expired'); return; }
+      // NOTE: expiry is deliberately NOT checked here. It used to be, and it
+      // cost buyers money: a payment that settled on-chain while the invoice was
+      // still valid but was PRESENTED a moment after it lapsed was refused
+      // without the chain ever being read, and PaymentRouter has already
+      // forwarded the value to the seller with no refund path. What matters is
+      // when the payment happened, not when the buyer got around to collecting,
+      // so the check moved below verifyTransfer where the on-chain timestamp is
+      // known.
 
       // 3b. Verify the on-chain transfer. serviceId binds this proof to THIS
       // service — PaymentRouter.seenNonce is keyed (serviceId, nonce), and
@@ -582,7 +681,12 @@ export function createApp(deps: MiddlewareDeps): Express {
         expectedTarget: service.paymentTarget,
         minAmountWei: service.priceWei,
         expectedNonce: nonceHeader,
-        maxAgeMs: config.invoiceTtlMs,
+        // Bound by the REDEMPTION window, not the quote window. maxAgeMs here
+        // measures how long ago the payment settled, so passing the invoice TTL
+        // made a slow-but-valid presentation indistinguishable from a stale one
+        // — and threw the buyer's money away for it. Whether the payment beat
+        // the invoice's own deadline is a separate question, answered below.
+        maxAgeMs: config.invoiceRedemptionWindowMs,
       });
       if (!verdict.ok) {
         if (verdict.reason === 'pending') {
@@ -593,6 +697,66 @@ export function createApp(deps: MiddlewareDeps): Express {
         }
         await respond402Fresh(res, service, resource, verdict.reason);
         return;
+      }
+
+      // Now that the chain has told us WHEN the payment settled, we can ask the
+      // only expiry question that is fair to the buyer: did they pay while the
+      // invoice was still valid? A payment that beat the deadline is honoured
+      // however late it is presented; one made against an already-lapsed quote
+      // is not, because the price it was quoted no longer stood.
+      if (verdict.timestamp > invoice.expiresAt) {
+        await respond402Fresh(res, service, resource, 'invoice_expired');
+        return;
+      }
+
+      // 3b-bis. PROVE THE PRESENTER IS THE PAYER.
+      //
+      // Everything checked so far is public. PaymentRouter.Paid indexes
+      // serviceId and nonce so that verification is one exact-match
+      // eth_getLogs — which also means the tx hash, the nonce and the service
+      // id are world-readable the instant the block lands, and the registry
+      // publishes gatewayBaseUrl on top. Without this check the X-PAYMENT proof
+      // is a bearer token: anyone watching the router's logs replays it, we
+      // verify it happily (the payment IS real), burn the invoice and hand the
+      // paid response to them. The buyer gets `invoice_used` on a fresh 402,
+      // and PaymentRouter has no refund path — their OG is already gone.
+      //
+      // The router already binds the payer on-chain (settledAmount is keyed on
+      // (serviceId, nonce, payer, payTo), with a comment explaining why). This
+      // is that same binding off-chain, where it was missing.
+      //
+      // Mock mode is exempt: mock signers hold no key material and cannot
+      // produce an EIP-191 signature at all. It has no real chain and no real
+      // money, and this mirrors how `pinToPublicIp`/`rejectPrivateHosts` are
+      // already gated on live mode.
+      //
+      // The condition is deliberately the OR of both signals. `chain.network`
+      // is the one the buyer client keys its own signing on
+      // (packages/client/src/index.ts), so matching it here keeps the two ends
+      // of the protocol in agreement; `config.mode` is kept alongside it so a
+      // live gateway handed a chain client that merely CLAIMS to be mock still
+      // demands the proof. Either signal saying "real money" is enough.
+      if (config.mode === 'live' || chain.network !== 'mock') {
+        const signature = payment.payload.signature ?? '';
+        if (signature === '') {
+          await respond402Fresh(res, service, resource, 'payment_proof_unsigned');
+          return;
+        }
+        const proof = buildPaymentProofMessage({
+          network: chain.network,
+          serviceId: service.id,
+          nonce: nonceHeader,
+          transaction: txHashHeader,
+        });
+        const recovered = await recoverSigner(proof, signature);
+        // Recovery succeeding proves nothing on its own — every well-formed
+        // signature recovers to SOME address. It is the comparison against the
+        // payer the CHAIN reported that carries the weight.
+        if (!recovered.valid || !sameAddress(recovered.address, verdict.from)) {
+          logger.warn('payment_proof_rejected', { serviceId: id });
+          await respond402Fresh(res, service, resource, 'payment_proof_invalid');
+          return;
+        }
       }
 
       // 3c. Burn the nonce BEFORE proxying — single-use even if the upstream
@@ -630,7 +794,20 @@ export function createApp(deps: MiddlewareDeps): Express {
         if (outcome.contentType) res.set('Content-Type', outcome.contentType);
         res.send(outcome.body);
       } else {
-        logger.warn('proxy_failed', { serviceId: id, error: outcome.error });
+        // The buyer paid and we could not deliver. The invoice was burned
+        // before proxying (so a payment stays single-use even when the upstream
+        // misbehaves), but a gateway-side failure — upstream unreachable, timed
+        // out, response too large — is the SELLER's backend failing, not a call
+        // the buyer consumed. The code already knows the difference: it refuses
+        // to attest these. It used to keep the money anyway, which is a silent
+        // charge for nothing, with no refund anywhere in the contract set.
+        //
+        // Releasing lets the payer present the SAME proof again once the
+        // upstream recovers, within the redemption window. That is safe only
+        // because the proof is now bound to the payer's signature — before that
+        // binding, releasing would have handed the retry to any observer.
+        await invoices.release(nonceHeader);
+        logger.warn('proxy_failed', { serviceId: id, error: outcome.error, invoiceReleased: true });
         res.status(outcome.status).json({ error: outcome.error });
       }
 

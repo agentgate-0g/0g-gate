@@ -98,6 +98,15 @@ export type AnySigner = SignerRef | KeySignerRef;
 export interface ChainClient {
   readonly network: string;
   /**
+   * The PaymentRouter this client will actually pay through. Exposed so the
+   * buyer can compare it against the `extra.router` a 402 advertises: the
+   * invoice names a router, but the client settles through its OWN configured
+   * one, so a mismatch means the gateway and the buyer disagree about where
+   * money goes. Silently ignoring that turns a router migration into
+   * paid-and-never-served. Optional so injected/test clients need not supply it.
+   */
+  readonly routerAddress?: string;
+  /**
    * Cheap, bounded reachability check for readiness probes (mock: ping devnet;
    * live: node-RPC status). Resolves when the backing chain is reachable, throws
    * otherwise. Optional so injected/test clients need not implement it.
@@ -121,4 +130,14 @@ export interface ChainClient {
   recordAttestation(input: { serviceId: number; nonce: string; payer: string; paymentTxHash: string; success: boolean }, signer: AnySigner): Promise<{ txHash: string }>;
   setActive(serviceId: number, active: boolean, signer: AnySigner): Promise<{ txHash: string }>;
   transfer(input: { to: string; amountWei: Wei; nonce: string; serviceId: number }, signer: AnySigner): Promise<{ txHash: string }>;
+  /**
+   * EIP-191 sign arbitrary bytes as `signer`. Used to prove possession of the
+   * paying key when presenting an X-PAYMENT proof, which is otherwise a bearer
+   * token anyone can read off the chain (see `buildPaymentProofMessage`).
+   *
+   * Optional so an injected/test ChainClient need not implement it — but the
+   * buyer client REFUSES TO PAY in live mode when it is absent rather than
+   * sending an unsigned, replayable proof. Fail closed, never silently weaker.
+   */
+  signMessage?(message: Uint8Array, signer: AnySigner): Promise<string>;
 }

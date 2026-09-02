@@ -68,7 +68,15 @@ For **live mode** (the normal hosted configuration):
 | `REGISTRY_CONTRACT_ADDRESS` | set after the contract deploy (see §6) |
 | `PAYMENT_ROUTER_ADDRESS` | set after the contract deploy (see §6) |
 | `ACTIVITY_LOOKBACK_BLOCKS` | optional, default `50000` — the `eth_getLogs` window for `/activity` |
-| `AGENTGATE_ADMIN_TOKEN` | any strong unique value — `loadConfig()` **refuses the default token in live mode**, and the dashboard's API routes call `loadConfig()` |
+
+> **Do not put `AGENTGATE_ADMIN_TOKEN` on Vercel.** The dashboard never reads it.
+> It is read-only — every route is a GET, there is no `/admin` surface — so
+> `dashboard/lib/server/chain.ts` calls `loadConfig(process.env, {
+> requireStrongAdminToken: false })` and nothing in the app ever touches
+> `config.adminToken`. Setting it there would copy the *gateway's* live
+> credential into a second provider's dashboard, its build logs and its
+> preview deployments, buying nothing at all. The token belongs on the
+> middleware and nowhere else.
 
 > **Mock-mode caveat:** in mock mode every chain read goes to `DEVNET_URL`
 > (default `http://localhost:4030`) — meaningless from Vercel's servers. A hosted
@@ -131,6 +139,8 @@ apply, on Railway the injected `PORT` wins.
 | `REGISTRY_CONTRACT_ADDRESS` | set after contract deploy (see §6) |
 | `PAYMENT_ROUTER_ADDRESS` | set after contract deploy (see §6) |
 | `GATE_SIGNER_KEY` | attestor private key (`0x` + 64 hex), injected from the platform's **secret store** — never a plain env var on a command line, never in a committed file. See [DEPLOY-GATEWAY.md](DEPLOY-GATEWAY.md#notes--security) for why an env-var key needs different handling than a key file |
+| `INVOICE_STORE_PATH` | ✓ **required in live mode** — `/app/packages/middleware/data/invoices.json`, i.e. on the volume below. `createApp()` throws `CONFIG_INVALID` and the service never boots without it |
+| `ATTESTATION_QUEUE_PATH` | recommended — `/app/packages/middleware/data/attestations.json`, same volume. Optional, but without it a served-and-paid call whose attestation had not confirmed before a restart is dropped from the trust ledger |
 | `INVOICE_TTL_MS`, `UPSTREAM_TIMEOUT_MS` | optional tuning (defaults 300000 / 30000) |
 
 **oracle**: needs nothing for the feed itself. Optionally `ORACLE_STATIC=1` for the
@@ -139,26 +149,36 @@ Leave `AGENTGATE_MODE` unset (= `mock`): the oracle never touches the chain, and
 setting `live` would make `loadConfig()` demand a non-default admin token for
 no benefit.
 
-### Middleware state: persistent volume (or accept ephemeral)
+### Middleware state: persistent volume (required in live mode)
 
-The middleware persists exactly one file: the serviceId → upstream-URL map at
-`/app/packages/middleware/data/upstreams.json`.
+Attach a Railway **Volume** to the middleware service with mount path
+`/app/packages/middleware/data`, and point `INVOICE_STORE_PATH` inside it. This
+is not a nice-to-have on Railway: a live-mode gateway **refuses to start**
+without `INVOICE_STORE_PATH`, and a path on the container's ephemeral layer
+satisfies the check while still losing every in-flight invoice on the next
+redeploy — a buyer who already paid on-chain, with no refund path in any of the
+three contracts. Set `ATTESTATION_QUEUE_PATH` on the same volume too, so a
+served-and-paid call whose attestation had not confirmed yet is replayed on
+boot instead of being dropped from the trust ledger.
 
-- **Persistent (recommended):** attach a Railway **Volume** to the middleware
-  service with mount path `/app/packages/middleware/data`. Mappings survive
-  redeploys. (The gate signer is a key in the environment, not a file — keep it in
-  the platform's secret store, not on this volume.)
-- **Ephemeral (acceptable):** without a volume, every redeploy starts with an empty
-  map. On-chain registrations are untouched; just re-add each mapping:
+Three files then live there: the serviceId → upstream-URL map
+(`upstreams.json`), the invoice store, and the attestation queue. (The gate
+signer is a key in the environment, not a file — keep it in the platform's
+secret store, never on this volume.)
 
-  ```bash
-  curl -X POST https://<middleware-domain>/admin/services \
-    -H "Authorization: Bearer $AGENTGATE_ADMIN_TOKEN" \
-    -H "Content-Type: application/json" \
-    -d '{"serviceId": 1, "upstreamUrl": "https://<oracle-domain>/feed"}'
-  ```
+Without a volume, every redeploy also starts with an empty upstream map.
+On-chain registrations are untouched; re-add each mapping:
 
-Invoices are in-memory by design (5-minute TTL) — no volume needed for them.
+```bash
+curl -X POST https://<middleware-domain>/admin/services \
+  -H "Authorization: Bearer $AGENTGATE_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"serviceId": 1, "upstreamUrl": "https://<oracle-domain>/feed"}'
+```
+
+Invoices quote for 5 minutes (`INVOICE_TTL_MS`) but stay redeemable for
+`INVOICE_REDEMPTION_WINDOW_MS` (24 h by default), which is exactly why they are
+not in-memory: the window outlives any redeploy you are likely to do.
 
 ---
 
@@ -206,12 +226,14 @@ docker build -f packages/devnet/Dockerfile     -t agentgate-devnet .
 | Var | middleware (Railway) | oracle (Railway) | dashboard (Vercel) | devnet (demo) |
 |---|---|---|---|---|
 | `AGENTGATE_MODE` | `live` | leave `mock` | `live` | `mock` |
-| `AGENTGATE_ADMIN_TOKEN` | ✓ req (non-default) | — | ✓ req in live mode (non-default; `loadConfig()` check) | — |
+| `AGENTGATE_ADMIN_TOKEN` | ✓ req (non-default) | — | — (never set it here — the dashboard is read-only and disables the check) | — |
 | `ZG_RPC_URL` | opt (has a default) | — | opt (has a default) | — |
 | `ZG_CHAIN_ID` / `ZG_NETWORK` / `ZG_EXPLORER_URL` | opt (defaults) | — | opt (defaults) | — |
 | `REGISTRY_CONTRACT_ADDRESS` | ✓ after deploy | — | ✓ after deploy | — |
 | `PAYMENT_ROUTER_ADDRESS` | ✓ after deploy | — | ✓ after deploy | — |
 | `GATE_SIGNER_KEY` | ✓ req (platform secret) | — | — | — |
+| `INVOICE_STORE_PATH` | ✓ req in live mode (on the volume) | — | — | — |
+| `ATTESTATION_QUEUE_PATH` | opt, recommended (same volume) | — | — | — |
 | `ACTIVITY_LOOKBACK_BLOCKS` | opt | — | opt | — |
 | `DEVNET_URL` | mock mode only | — | mock mode only | — |
 | `ORACLE_STATIC` | — | opt (`1` = fixture) | — | — |
@@ -249,9 +271,11 @@ contract-dependent call throws `CONTRACT_NOT_DEPLOYED` (503) — the full list i
 2. Set `REGISTRY_CONTRACT_ADDRESS` and `PAYMENT_ROUTER_ADDRESS` on **every**
    live-mode service: the middleware (Railway) and the dashboard (Vercel) — plus
    any CLI/agent env.
-3. Ensure `AGENTGATE_MODE=live` everywhere (middleware, dashboard), with the
-   live-mode invariants satisfied: non-default `AGENTGATE_ADMIN_TOKEN`, and a
-   funded `GATE_SIGNER_KEY` on the middleware (from the platform's secret store).
+3. Ensure `AGENTGATE_MODE=live` everywhere (middleware, dashboard). The
+   live-mode invariants are the **middleware's**: a non-default
+   `AGENTGATE_ADMIN_TOKEN`, a funded `GATE_SIGNER_KEY` (from the platform's
+   secret store), and `INVOICE_STORE_PATH` on the volume. The dashboard needs
+   none of the three — it is read-only and never signs, spends or admins.
 4. Redeploy/restart both services (Railway and Vercel redeploy on env change).
 5. Wrap the oracle for real: `npm run agentgate -- wrap --url https://<oracle-domain>/feed …`
    against the hosted middleware, then re-check `GET /healthz` and a full

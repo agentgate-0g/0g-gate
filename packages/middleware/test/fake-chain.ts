@@ -30,7 +30,18 @@ interface FakeTransfer {
  * no devnet, no chain impl details.
  */
 export class FakeChainClient implements ChainClient {
-  readonly network = 'mock';
+  /**
+   * Defaults to 'mock' so existing fixtures are unchanged. A test that needs
+   * the real-money code paths (notably the X-PAYMENT payer-proof requirement,
+   * which the gateway keys off this exact value) passes a live network name
+   * without also flipping config.mode to 'live' — which would drag in the
+   * live-only SSRF guard and reject the loopback test upstream.
+   */
+  readonly network: string;
+
+  constructor(opts: { network?: string } = {}) {
+    this.network = opts.network ?? 'mock';
+  }
   readonly services = new Map<number, ServiceRecord>();
   readonly attestations: AttestationRecord[] = [];
   readonly transfers = new Map<string, FakeTransfer>();

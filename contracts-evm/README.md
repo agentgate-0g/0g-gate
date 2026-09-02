@@ -30,14 +30,22 @@ was meaningful.
 
 ## Deployed addresses
 
-> **Two deployments are live.** The audited-and-fixed contract set was deployed
-> 2026-09-01 and is NOT yet in use: the CLI defaults, the hosted gateway and the
-> Wave 3 demo all still point at the original set below it. Cutting over is a
-> coordinated change — the ABIs differ, so the contracts and the gateway must
-> switch together, and a new registry starts from empty state with no service
-> and no score carried across.
+> **One deployment.** This page used to describe two — a "current" set and a
+> reviewed set awaiting cutover — and the two tables below are what is left of
+> that: they list the *same* three addresses. The cutover happened; there is no
+> second deployment to switch to, and the addresses here are also the CLI's
+> built-in defaults. Both sections are kept because each carries facts the other
+> does not (the seeding topology below, the gas and bytecode figures further
+> down). Nothing here is upgradable, so a future fix is a *new* address starting
+> from empty state — no service and no score carried across.
 
-### Audited set — deployed 2026-09-01, awaiting cutover
+### Deployed set — 0G Galileo Testnet, 2026-09-01
+
+> **No external audit.** Where this page says "reviewed", it means rounds of
+> adversarial self-review inside this repository, backed by the Foundry suite —
+> not a third-party engagement. There is no audit report, because no external
+> firm has looked at this code. Read every claim on this page with that in mind,
+> and size any position accordingly.
 
 | Contract | Address | Explorer |
 |---|---|---|
@@ -49,7 +57,7 @@ Block 52458928, all three in one block. Total cost **0.015197 OG**
 (3,799,198 gas at 6 gwei). Constructor wiring verified live: `Registry.ROUTER()`
 returns the router and `SpendGuard.REGISTRY()` returns the registry.
 
-Closes three rounds of audit findings. Note the operational consequence: a
+Closes three rounds of in-repo self-review findings. Note the operational consequence: a
 service's attestor may no longer be its owner or its payout address, so seeding
 this registry needs three distinct addresses per service, not one.
 
@@ -65,7 +73,7 @@ and attests the call itself — so both read 1/1.
 | buyer | `0x69EcD4f412a130C0cD78BFE1fcDb8BF08F407bd3` |
 
 **The attestor must be the gateway's signer, and the owner must not be.** This
-is forced by the audit fix that stopped a seller witnessing its own score, and
+is forced by the self-review fix that stopped a seller witnessing its own score, and
 it is not obvious until a live cutover: services 1 and 2 were first registered
 with the gate key as OWNER and a standalone wallet as attestor, which looked
 reasonable and passed every check — then every attestation failed with
@@ -78,7 +86,7 @@ and is paid, the gateway attests, and the buyer is none of them.
 The keys for the seller and buyer wallets are mode-600 files in
 `~/.agentgate-{payout,buyer}.key` and are not in the repo.
 
-### Original set — still live, still what everything uses
+### The same set again — deploy cost and bytecode verification
 
 | Contract | Address | Explorer |
 |---|---|---|
@@ -193,6 +201,20 @@ intentionally not been run yet.
      --with-gas-price 6000000000 \
      --broadcast
    ```
+
+   For **mainnet**, name the chain and verify — see
+   [docs/DEPLOY.md](../docs/DEPLOY.md#deploying-to-mainnet--name-the-chain-and-verify):
+   ```bash
+   ZG_EXPLORER_API_KEY=<key> forge script script/Deploy.s.sol:Deploy \
+     --sig "runOnChain(uint256)" 16661 \
+     --rpc-url mainnet --private-key "$DEPLOYER_KEY" \
+     --priority-gas-price 4000000000 --with-gas-price 6000000000 \
+     --broadcast --verify --verifier etherscan
+   ```
+   `runOnChain` reverts unless the connected chain really is 16661, because the
+   `galileo` endpoint is `"${ZG_RPC_URL}"` and deploys wherever that points.
+   `--verify` matters: unreadable source on a money-holding contract is not
+   shippable, and the verifier base is `/open/api`, not `/api`.
 
 > **0G rejects Foundry's auto-estimated fee — pass the tip explicitly.** 0G's base
 > fee is ~7 **wei**, so `forge script` derives a priority fee of 1 wei and the node

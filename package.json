@@ -22,7 +22,8 @@
     "build": "npm run build -w dashboard",
     "agent": "tsx packages/buyer-agent/src/main.ts",
     "agentgate": "tsx packages/cli/src/bin.ts",
-    "smoke:live": "tsx scripts/smoke-live-read.ts"
+    "smoke:live": "tsx scripts/smoke-live-read.ts",
+    "gen:abi": "cd contracts-evm && forge build && cd .. && node scripts/gen-abi.mjs"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",

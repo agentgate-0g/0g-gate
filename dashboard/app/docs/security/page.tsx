@@ -245,11 +245,16 @@ export default function SecurityPage() {
       <P>
         A seller could inflate their own trust score by paying for their own service. After
         verification the gateway runs <M>isSelfPayment(payerFrom, service)</M>, comparing the
-        verified payer against the service&apos;s <M>owner</M> and <M>paymentTarget</M>{' '}
-        (compared as lowercased addresses). A self-paid call is still
+        verified payer against the service&apos;s <M>owner</M>, <M>paymentTarget</M> and{' '}
+        <M>attestor</M> (compared as lowercased addresses). A self-paid call is still
         served — the payment is real — but <strong>no attestation is recorded</strong>, so it never
         feeds the trust score; the gateway logs <M>attestation_skipped</M> with reason{' '}
-        <M>self_payment</M>.
+        <M>self_payment</M>. <M>AgentGateRegistry.recordAttestation</M> re-checks the same thing
+        on-chain and reverts <M>SelfPayment</M>, so the guard does not depend on the gateway being
+        honest. Be clear about what this does and does not buy: it closes the free self-pay loop,
+        but a seller who funds a fresh address and buys from itself pays its own payout address and
+        loses only gas. Staking-weighted attestations with slashing are on the roadmap for exactly
+        that reason.
       </P>
 
       <H2 id="keys">Key handling and secret redaction</H2>
@@ -261,8 +266,16 @@ export default function SecurityPage() {
         dumps. Inject them from your platform&apos;s secret store, never on a command line (which
         lands in shell history and <M>ps</M>), never in an image layer or a committed compose file.
         Keep the gate key funded but thin — it only pays attestation gas — and rotate by deploying a
-        new key and calling <M>setAttestor(serviceId, newAddress)</M>, which is owner-only and takes
-        effect immediately.
+        new key and calling <M>setAttestor(serviceId, newAddress)</M>, which is owner-only and{' '}
+        <strong>delayed, not immediate</strong>:{' '}
+        <M>AgentGateRegistry.ATTESTOR_ROTATION_DELAY_MS</M> is 15 minutes and the incumbent attestor
+        stays authoritative for that whole window, so an attestation for a call already served and
+        paid is not lost to a rotation landing mid-flight. During a key compromise that window is
+        15 minutes in which the stolen key can still write scores. The only owner control that bites
+        at once is <M>setActive(serviceId, false)</M>, which makes <M>getPaymentTerms</M> revert{' '}
+        <M>ServiceInactive</M> and stops the service being sellable — it does not silence the
+        attestor, because <M>recordAttestation</M> is deliberately ungated on <M>active</M> so an
+        owner cannot bury a failure attestation with the kill switch.
       </P>
       <P>
         The same reasoning applies to the CLI&apos;s <M>--key</M> flag: unlike a file path it carries
@@ -438,24 +451,26 @@ export default function SecurityPage() {
         head={['Control', 'Mechanism']}
         rows={[
           [
-            'Untrusted text is delimited',
-            'Catalog and upstream text is passed to the model as clearly delimited, labelled-untrusted content — never concatenated into the instruction region.',
+            'Untrusted text is delimited (with one exception)',
+            'Catalog entries, service metadata and paid response bodies are wrapped in a labelled fence before they reach a model: <untrusted_catalog> / <untrusted_data> in packages/buyer-agent/src/llm.ts, and fenceUntrusted() on all four tools in packages/cli/src/mcp.ts — the shipped MCP surface. The exception is a tool ERROR: a refused endpoint URL or a service name in an error message reaches the model as bare text, because an MCP error result has no fence to put it in. Those strings are JSON-quoted and truncated to 120 characters (quoteSeller) so they cannot carry a payload of any size, but they are not labelled untrusted.',
           ],
           [
             'Decisions are re-validated in code',
             'The serviceId and budget the model "chooses" are re-validated programmatically before any payment: the price cap (maxPriceWei → PRICE_EXCEEDED) and PaymentRequiredResponse schema (parsePaymentRequired) are enforced by code, not the model.',
           ],
           [
-            'Spending is bounded regardless',
-            'Even a fully hijacked agent cannot pay above its configured cap, on the wrong network, or to a malformed paymentTarget — those guards live in the deterministic pay path described above.',
+            'Spending is bounded per call — not in total',
+            'On a single call a hijacked agent cannot exceed the ceiling: the amount is capped at the price the REGISTRY lists (never the price the 402 asks for), and separately at an operator ceiling read only from the environment (AGENTGATE_MAX_SPEND_OG / BUYER_BUDGET_OG, default 5 OG) — the model-supplied maxOg can lower that, never raise it, and omitting it does not remove it. expectPayTo / expectServiceId bind the payment to the payout address and service id the registry holds, parsePaymentRequired refuses an invoice offering no payment on this chain (NETWORK_MISMATCH) and a payTo that is not a 0x-prefixed address, and all of it is checked before anything is signed. What is NOT bounded is the number of calls: nothing rate-limits a hijacked agent into calling again, so the ceiling on total loss is the buyer key balance (and, for the buyer agent, its per-run budget). Fund a buying key thin.',
           ],
         ]}
       />
       <Callout tone="info" title="Trust boundary, not trust the model">
         The model is treated as fallible: it helps choose <em>which</em> service to call, but the
-        ceiling on <em>how much</em> it can spend, <em>where</em> the money goes, and <em>which
-        chain</em> it pays on are enforced by the deterministic checks in{' '}
-        <DocLink href="/docs/buyers">the buyer client</DocLink>, not by the prompt.
+        per-call ceiling on <em>how much</em> it can spend, <em>where</em> the money goes, and{' '}
+        <em>which chain</em> it pays on are enforced by the deterministic checks in{' '}
+        <DocLink href="/docs/buyers">the buyer client</DocLink>, not by the prompt. The one thing
+        the prompt still influences is <em>how often</em> — so the balance on the buying key is
+        the real ceiling on a worst case.
       </Callout>
 
       <H2 id="checklist">Before you go live</H2>

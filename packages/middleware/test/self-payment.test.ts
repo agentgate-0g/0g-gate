@@ -31,6 +31,14 @@ describe('isSelfPayment — F1 wash-trade guard', () => {
   it('true when the payer is the service owner', () => {
     expect(isSelfPayment(OWNER, svc())).toBe(true);
   });
+  // The contract rejects payer == attestor too: the witness is as interested a
+  // party as the owner. A guard narrower than the contract does not create a
+  // hole — it creates a served call whose attestation reverts forever, so the
+  // seller silently loses reputation for work they really did.
+  it('true when the payer is the ATTESTOR — matching the registry revert', () => {
+    expect(isSelfPayment(ATTESTOR, svc())).toBe(true);
+  });
+
   it('false for a distinct third-party payer', () => {
     expect(isSelfPayment(`0x${'ee'.repeat(20)}`, svc())).toBe(false);
   });

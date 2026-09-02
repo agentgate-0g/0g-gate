@@ -74,6 +74,105 @@ export const DEFAULT_GATEWAY_URL = 'https://0g-gateway.mdloglabs.org';
  */
 export const DEFAULT_DASHBOARD_URL = 'https://agentgate-0g.mdloglabs.org';
 
+
+/**
+ * A complete, self-consistent chain identity. The five values below only make
+ * sense TOGETHER — an RPC from one network with a registry address from another
+ * is not a configuration, it is a way to burn money — so they are selected as
+ * one unit by name rather than as five independent environment variables.
+ *
+ * Before profiles existed there was no notion of "environment" at all: `live`
+ * simply MEANT Galileo testnet, every chain value had a testnet default, and an
+ * operator who repointed ZG_RPC_URL at mainnet and forgot the rest got a client
+ * that read a testnet address on mainnet and paid into it.
+ */
+/**
+ * Mirror of AgentGateRegistry.TERMS_CHANGE_DELAY_MS (15 minutes).
+ *
+ * A seller's payout address and price list change on a DELAY so a buyer who is
+ * mid-payment cannot have the terms moved under them. That guarantee only holds
+ * while the delay outlasts how stale the gateway's view of a service can be —
+ * and the contract is immutable, so the delay can never be raised to catch up
+ * with a configuration that outgrows it.
+ */
+const TERMS_CHANGE_DELAY_MS = 15 * 60 * 1000;
+
+/** Mirror of the middleware's ServiceCache TTL (packages/middleware/src/service-cache.ts). */
+const SERVICE_CACHE_TTL_MS = 60_000;
+
+/**
+ * The gateway's worst-case staleness is one service-cache lifetime plus one
+ * invoice lifetime: it can price a 402 from a record read a cache-TTL ago, and
+ * that quote then stands for the whole invoice TTL. If that total ever reaches
+ * TERMS_CHANGE_DELAY_MS, a delayed terms change can mature while a quote issued
+ * against the OLD terms is still payable — reopening exactly the bug the
+ * on-chain delay exists to close.
+ *
+ * One safety margin is subtracted so the two are never merely equal.
+ */
+const TTL_SAFETY_MARGIN_MS = 60_000;
+export const MAX_INVOICE_TTL_MS =
+  TERMS_CHANGE_DELAY_MS - SERVICE_CACHE_TTL_MS - TTL_SAFETY_MARGIN_MS;
+
+export interface NetworkProfile {
+  network: string;
+  chainId: number;
+  rpcUrl: string;
+  explorerUrl: string;
+  registry: string;
+  router: string;
+  spendGuard: string;
+}
+
+/**
+ * `mainnet` intentionally carries EMPTY contract addresses: nothing is deployed
+ * to 0G mainnet yet, and an empty address fails closed at the first use with
+ * "not deployed" instead of silently reusing a testnet one. Fill these in as
+ * part of the mainnet deploy, in the same commit that records the addresses.
+ *
+ * NOTE: the mainnet explorer host mirrors the testnet naming
+ * (`chainscan-galileo.0g.ai` -> `chainscan.0g.ai`) and answers 200, but it could
+ * not be confirmed programmatically as the mainnet instance. It is used only to
+ * build display links, so a wrong value is a broken link rather than lost funds
+ * — verify it before the first mainnet announcement.
+ */
+export const NETWORK_PROFILES: Record<string, NetworkProfile> = {
+  galileo: {
+    network: DEFAULT_ZG_NETWORK,
+    chainId: DEFAULT_ZG_CHAIN_ID,
+    rpcUrl: DEFAULT_ZG_RPC_URL,
+    explorerUrl: DEFAULT_ZG_EXPLORER_URL,
+    registry: DEFAULT_REGISTRY_ADDRESS,
+    router: DEFAULT_PAYMENT_ROUTER_ADDRESS,
+    spendGuard: DEFAULT_SPEND_GUARD_ADDRESS,
+  },
+  mainnet: {
+    network: '0g-mainnet',
+    chainId: 16661,
+    rpcUrl: 'https://evmrpc.0g.ai',
+    explorerUrl: 'https://chainscan.0g.ai',
+    registry: '',
+    router: '',
+    spendGuard: '',
+  },
+};
+
+/** The profile used when ZG_NETWORK_PROFILE is unset. */
+export const DEFAULT_NETWORK_PROFILE = 'galileo';
+
+export function networkProfile(name: string): NetworkProfile {
+  const found = NETWORK_PROFILES[name];
+  if (!found) {
+    throw new AgentGateError(
+      'CONFIG_INVALID',
+      `unknown ZG_NETWORK_PROFILE ${JSON.stringify(name)} — known profiles: ` +
+        `${Object.keys(NETWORK_PROFILES).join(', ')}`,
+      500,
+    );
+  }
+  return found;
+}
+
 export interface AgentGateConfig {
   mode: AgentGateMode;
   // ports
@@ -88,6 +187,18 @@ export interface AgentGateConfig {
   // middleware
   adminToken: string;
   invoiceTtlMs: number;
+  /**
+   * How long after issuance a SETTLED payment may still be redeemed.
+   *
+   * The invoice TTL bounds how long the quoted price is honoured; this bounds
+   * how long the buyer has to come back and collect. They are not the same
+   * thing, and conflating them lost money: a payment confirmed on-chain inside
+   * the TTL but PRESENTED after it was refused without the chain ever being
+   * read, and PaymentRouter forwards msg.value to the seller in the same
+   * transaction — there is no refund. Slow settlement, a client retry, or a
+   * gateway restart must not be the difference between paying and being served.
+   */
+  invoiceRedemptionWindowMs: number;
   upstreamTimeoutMs: number;
   /**
    * Number of trusted reverse-proxy hops in front of the gateway (Express
@@ -212,24 +323,41 @@ export function loadConfig(
   const devnetUrl = readUrl(env, 'DEVNET_URL', `http://localhost:${devnetPort}`, ['http:', 'https:']);
 
   const adminToken = readStr(env, 'AGENTGATE_ADMIN_TOKEN', DEFAULT_ADMIN_TOKEN);
-  const invoiceTtlMs = readInt(env, 'INVOICE_TTL_MS', 300_000, 1, Number.MAX_SAFE_INTEGER);
+  const invoiceTtlMs = readInt(env, 'INVOICE_TTL_MS', 300_000, 1, MAX_INVOICE_TTL_MS);
+  // 24h by default: generous, because the cost of it being too SHORT is a buyer
+  // who paid and cannot collect, while the cost of it being too long is only a
+  // slightly larger invoice file.
+  const invoiceRedemptionWindowMs = readInt(
+    env, 'INVOICE_REDEMPTION_WINDOW_MS', 86_400_000, 1, Number.MAX_SAFE_INTEGER,
+  );
+  if (invoiceRedemptionWindowMs < invoiceTtlMs) {
+    throw configError(
+      `INVOICE_REDEMPTION_WINDOW_MS (${invoiceRedemptionWindowMs}) must be >= INVOICE_TTL_MS ` +
+        `(${invoiceTtlMs}) — a redemption window shorter than the quote window means a payment ` +
+        'made against a still-valid invoice can never be collected',
+    );
+  }
   const upstreamTimeoutMs = readInt(env, 'UPSTREAM_TIMEOUT_MS', 30_000, 1, Number.MAX_SAFE_INTEGER);
   const trustProxy = readInt(env, 'TRUST_PROXY', 0, 0, 10);
 
-  const zgRpcUrl = readUrl(env, 'ZG_RPC_URL', DEFAULT_ZG_RPC_URL, ['http:', 'https:']);
-  const zgChainId = readInt(env, 'ZG_CHAIN_ID', DEFAULT_ZG_CHAIN_ID, 1, Number.MAX_SAFE_INTEGER);
-  const zgNetwork = readStr(env, 'ZG_NETWORK', DEFAULT_ZG_NETWORK);
-  const zgExplorerUrl = readUrl(env, 'ZG_EXPLORER_URL', DEFAULT_ZG_EXPLORER_URL, ['http:', 'https:']);
-  const registryContractAddress = readStr(env, 'REGISTRY_CONTRACT_ADDRESS', DEFAULT_REGISTRY_ADDRESS);
+  // The chain identity comes from ONE named profile, so the five values below
+  // move together. Individual vars still override for a custom/self-hosted
+  // deployment, but the DEFAULTS are never a mix of two networks.
+  const profile = networkProfile(readStr(env, 'ZG_NETWORK_PROFILE', DEFAULT_NETWORK_PROFILE));
+  const zgRpcUrl = readUrl(env, 'ZG_RPC_URL', profile.rpcUrl, ['http:', 'https:']);
+  const zgChainId = readInt(env, 'ZG_CHAIN_ID', profile.chainId, 1, Number.MAX_SAFE_INTEGER);
+  const zgNetwork = readStr(env, 'ZG_NETWORK', profile.network);
+  const zgExplorerUrl = readUrl(env, 'ZG_EXPLORER_URL', profile.explorerUrl, ['http:', 'https:']);
+  const registryContractAddress = readStr(env, 'REGISTRY_CONTRACT_ADDRESS', profile.registry);
   // Mock mode falls back to a placeholder router so its 402s stay payable by a
   // real client (see MOCK_PAYMENT_ROUTER_ADDRESS); live mode falls back to the
   // deployed address, and createApp() refuses to boot live without a real one.
   const paymentRouterAddress = readStr(
     env,
     'PAYMENT_ROUTER_ADDRESS',
-    mode === 'mock' ? MOCK_PAYMENT_ROUTER_ADDRESS : DEFAULT_PAYMENT_ROUTER_ADDRESS,
+    mode === 'mock' ? MOCK_PAYMENT_ROUTER_ADDRESS : profile.router,
   );
-  const spendGuardAddress = readStr(env, 'SPEND_GUARD_ADDRESS', DEFAULT_SPEND_GUARD_ADDRESS);
+  const spendGuardAddress = readStr(env, 'SPEND_GUARD_ADDRESS', profile.spendGuard);
   // 1,000,000 blocks, not 50,000. 0G Galileo produces a block every ~0.5s, so
   // the old default was under SEVEN HOURS of history — a service busy yesterday
   // showed an empty activity ledger today, and nothing in the UI distinguished
@@ -280,6 +408,7 @@ export function loadConfig(
     mockSellerAccount,
     adminToken,
     invoiceTtlMs,
+    invoiceRedemptionWindowMs,
     upstreamTimeoutMs,
     trustProxy,
     zgRpcUrl,

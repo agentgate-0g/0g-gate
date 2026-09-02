@@ -31,6 +31,7 @@ export function testConfig(overrides: Partial<AgentGateConfig> = {}): AgentGateC
     mockSellerAccount: '',
     adminToken: 'test-admin-token',
     invoiceTtlMs: 300_000,
+    invoiceRedemptionWindowMs: 86_400_000,
     upstreamTimeoutMs: 5_000,
     trustProxy: 0,
     zgRpcUrl: 'https://evmrpc-testnet.0g.ai',
@@ -225,11 +226,21 @@ export async function payInvoice(
   return { txHash, nonce: req.extra.nonce, network: req.network };
 }
 
-export function proofHeaders(proof: { txHash: string; nonce: string; network: string }): Record<string, string> {
+export function proofHeaders(proof: {
+  txHash: string;
+  nonce: string;
+  network: string;
+  /** Payer proof (EIP-191 over buildPaymentProofMessage). Omit to present an unsigned proof. */
+  signature?: string;
+}): Record<string, string> {
   return {
     'x-payment': encodeXPayment({
       x402Version: 1, scheme: 'exact-settled', network: proof.network,
-      payload: { transaction: proof.txHash, nonce: proof.nonce },
+      payload: {
+        transaction: proof.txHash,
+        nonce: proof.nonce,
+        ...(proof.signature !== undefined ? { signature: proof.signature } : {}),
+      },
     }),
   };
 }

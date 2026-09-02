@@ -50,7 +50,13 @@ contract GasCouplingTest is Test {
 
     function _debitGas(uint64 svc) internal returns (uint256) {
         vm.prank(owner);
-        uint64 pid = guard.openPolicy(gate, 10 ether, 1 ether, 60_000, 100, 2, false);
+        uint64 pid = guard.openPolicy(gate, 10 ether, 1 ether, 60_000, 100, 2);
+        // Every policy enforces its owner's allowlist now, so the service under
+        // measurement has to be on it. The lookup is one mapping read either
+        // way and does not depend on accepts[] length, which is what this
+        // measures.
+        vm.prank(owner);
+        guard.setServiceAllowed(pid, svc, true);
         vm.prank(owner);
         guard.deposit{value: 5 ether}(pid);
         vm.prank(gate);
@@ -60,13 +66,17 @@ contract GasCouplingTest is Test {
     }
 
     function test_debitGasDoesNotScaleWithTargetServicePriceListLength() public {
+        // The fat service lists the most options the registry now allows;
+        // MAX_PAYMENT_OPTIONS caps the griefing lever, this pins that even at
+        // the cap the payout lookup does not walk the list.
+        uint256 fatLen = reg.MAX_PAYMENT_OPTIONS();
         uint64 lean = _register(1);
-        uint64 fat = _register(200);
+        uint64 fat = _register(fatLen);
         uint256 gLean = _debitGas(lean);
         uint256 gFat = _debitGas(fat);
         emit log_named_uint("debit gas, 1 payment option  ", gLean);
-        emit log_named_uint("debit gas, 200 payment options", gFat);
-        emit log_named_uint("overhead per extra option    ", (gFat - gLean) / 199);
+        emit log_named_uint("debit gas, max payment options", gFat);
+        emit log_named_uint("overhead per extra option    ", (gFat - gLean) / (fatLen - 1));
         // A payout-target lookup must not cost more because the seller listed
         // more prices. Allow 25% slack for unrelated state differences.
         assertLt(gFat, (gLean * 125) / 100, "debit cost scales with accepts[] length");

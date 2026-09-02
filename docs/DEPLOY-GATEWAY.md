@@ -22,7 +22,7 @@ attestations.
 | `GATE_SIGNER_KEY` | attestor key (0x + 64 hex) the gateway signs `recordAttestation` with (funded) |
 | `AGENTGATE_ADMIN_TOKEN` | a strong unique token (the shipped default is refused in live) — only guards the legacy `/admin/services`; self-service mapping does not use it |
 | `TRUST_PROXY=1` | when behind exactly one platform proxy (Railway/Fly/Cloudflare), so rate-limit keys off the real client IP |
-| `INVOICE_STORE_PATH` | JSON file for the `FileInvoiceStore` — issued invoices survive a gateway restart, so a buyer who already paid on-chain can still redeem (finding F2). Unset = in-memory only |
+| `INVOICE_STORE_PATH` | JSON file for the `FileInvoiceStore` — issued invoices survive a gateway restart, so a buyer who already paid on-chain can still redeem (finding F2). **Live mode refuses to boot without it** (`createApp()` throws `CONFIG_INVALID`): `PaymentRouter.pay` forwards the money to the seller in the same transaction and no contract here has a refund path, so an invoice lost to a restart is a buyer who paid for nothing. Point it at persistent storage, not at a container's ephemeral layer |
 
 ## Run it
 
@@ -38,6 +38,7 @@ docker run -d --name agentgate-gateway -p 4021:4021 \
   --env-file /path/to/gate-signer.env \
   -e TRUST_PROXY=1 \
   -v agentgate-gateway-data:/app/packages/middleware/data \
+  -e INVOICE_STORE_PATH=/app/packages/middleware/data/invoices.json \
   agentgate-gateway
 ```
 
@@ -82,7 +83,22 @@ irrational.
   - Keep the gate key funded but *thin* — it only pays attestation gas. Its
     blast radius should be one day of attestations, not a treasury.
   - Rotate by deploying a new key and calling `setAttestor(serviceId, newAddr)`
-    per service (owner-only); the old key stops being able to attest immediately.
+    per service (owner-only). **This is a delayed rotation, not a revocation.**
+    `AgentGateRegistry.ATTESTOR_ROTATION_DELAY_MS` is 15 minutes and the
+    *incumbent* attestor stays the authorised one for that entire window: the
+    delay exists so an attestation for a call that was already served and paid
+    is not lost to a rotation landing mid-flight, but during an incident it
+    means a compromised key keeps writing scores for fifteen more minutes.
+    Plan the incident response around that, not around the call returning.
+  - **The only control that takes effect immediately is the owner calling
+    `setActive(serviceId, false)`.** `getPaymentTerms` reverts `ServiceInactive`
+    from the moment that transaction lands, so the service stops being sellable
+    at once — through the gateway and through `SpendGuard.debit` alike. It does
+    *not* silence the compromised attestor: `recordAttestation` is deliberately
+    ungated on `active`, so an owner cannot front-run a failure attestation with
+    the kill switch. So the order under a suspected key compromise is: stop the
+    sale with `setActive(false)`, then `setAttestor(...)`, then wait out the
+    rotation delay before turning the service back on.
   - The application never logs a key: `loadConfig()` reports a malformed key by
     variable name only, and the logger redacts any field whose name matches a
     key/token pattern.
@@ -99,25 +115,52 @@ uses **PM2** (its daemon already runs), so the gateway + dashboard are defined i
 `deploy/agentgate.ecosystem.config.cjs` and started with:
 
 ```bash
-pm2 start deploy/agentgate.ecosystem.config.cjs   # agentgate-gateway (:4021) + agentgate-dashboard (:3000)
+pm2 start deploy/agentgate.ecosystem.config.cjs   # agentgate-0g-gateway + agentgate-0g-dashboard
 pm2 save                                           # persist across reboot (pm2 startup is configured)
-pm2 status ; pm2 logs agentgate-gateway
-curl -s http://127.0.0.1:4021/healthz              # {"ok":true,"network":"0g-galileo"}
+pm2 status ; pm2 logs agentgate-0g-gateway
+curl -s http://127.0.0.1:16021/healthz              # {"ok":true,"network":"0g-galileo"}
 ```
 
+Two names and one port in there are not interchangeable:
+
+- The pm2 apps are `agentgate-0g-gateway` / `agentgate-0g-dashboard`, with the
+  `0g-` prefix. A pm2 app named plain `agentgate-gateway` already exists on this
+  box pointing at an unrelated older checkout (see the comment at the top of
+  `deploy/agentgate.ecosystem.config.cjs`), so `pm2 logs agentgate-gateway`
+  tails *that* application's logs and tells you nothing about this one.
+- The gateway's port is `MIDDLEWARE_PORT` from the repo's root `.env`, not a
+  constant: `.env.example` ships `4021`, **this box runs `16021`**. The
+  dashboard is on `DASHBOARD_PORT` (the ecosystem file defaults it to `13000`,
+  because `3000` is taken here). Use the values from your own `.env` below.
+
 Alternative (no PM2): a systemd `--user` unit is shipped at
-`deploy/agentgate-gateway.service` — `cp` it to `~/.config/systemd/user/`,
-`loginctl enable-linger "$USER"`, then `systemctl --user enable --now agentgate-gateway`.
+`deploy/agentgate-gateway.service`. Its `WorkingDirectory` is the placeholder
+`@REPO@`, substituted on the way in — a unit file is copied out of the repo, so
+it cannot derive the repo path at runtime the way the PM2 config does from
+`__dirname`, and a hardcoded one is how it previously ended up booting a
+different checkout:
+
+```bash
+mkdir -p ~/.config/systemd/user
+sed "s|@REPO@|$(git rev-parse --show-toplevel)|" deploy/agentgate-gateway.service \
+  > ~/.config/systemd/user/agentgate-gateway.service
+loginctl enable-linger "$USER"
+systemctl --user daemon-reload
+systemctl --user enable --now agentgate-gateway
+```
 
 **2. Set `TRUST_PROXY=1` in `.env`** (behind exactly one Cloudflare hop) so the
 rate limiter keys off the real client IP, then restart the unit.
 
-**3. Expose `0g-gateway.mdloglabs.org` → `http://localhost:4021`** — pick one:
+**3. Expose `0g-gateway.mdloglabs.org` → `http://localhost:<MIDDLEWARE_PORT>`**
+(`16021` on this box, per the `.env` above — not `4021`; a tunnel pointed at
+`4021` here lands on nothing, or worse on whatever else claimed that port) —
+pick one:
 
 - **A — add a public hostname to the existing (dashboard) tunnel** (fastest, no
   second process): Cloudflare **Zero Trust → Networks → Tunnels →** the dashboard
   tunnel **→ Public Hostnames → Add** → subdomain `0g-gateway`, domain
-  `mdloglabs.org`, service `HTTP → localhost:4021`. Done — no CLI, no code change
+  `mdloglabs.org`, service `HTTP → localhost:16021`. Done — no CLI, no code change
   (`DEFAULT_GATEWAY_URL` already points here). The `0g-` prefix is not optional:
   `gateway.mdloglabs.org` is the retired Casper deployment, and pointing this
   tunnel there registers services against a different chain's registry.
@@ -133,7 +176,7 @@ rate limiter keys off the real client IP, then restart the unit.
   #   credentials-file: /home/mdlog/.cloudflared/<UUID>.json
   #   ingress:
   #     - hostname: 0g-gateway.mdloglabs.org
-  #       service: http://localhost:4021
+  #       service: http://localhost:16021        # = MIDDLEWARE_PORT in the root .env
   #     - service: http_status:404
   cloudflared tunnel --config ~/.cloudflared/agentgate-gateway.yml run agentgate-gateway
   ```
