@@ -89,21 +89,44 @@ describe('FileInvoiceStore', () => {
     }
   });
 
-  it('starts empty on a missing or corrupt file (never throws on boot)', async () => {
+  it('starts empty on a missing file — that is a fresh gateway, not a fault', async () => {
     const s1 = new FileInvoiceStore(await tmpFile());
     try {
       expect(await s1.get('x')).toBeNull();
     } finally {
       s1.close();
     }
+  });
+
+  // Starting empty on corruption looked like the safe choice and is the
+  // opposite: live mode refuses to boot without this store precisely because a
+  // lost invoice is a buyer who paid on-chain and can never be served or
+  // refunded. Discarding the file produces that outcome while reporting health.
+  it('REFUSES to boot on a corrupt file rather than silently discarding invoices', async () => {
     const file = await tmpFile();
     await writeFile(file, '{not json', 'utf8');
-    const s2 = new FileInvoiceStore(file);
+    expect(() => new FileInvoiceStore(file)).toThrow(/not valid JSON/);
+
+    const notArray = await tmpFile();
+    await writeFile(notArray, '{"nonce":"1"}', 'utf8');
+    expect(() => new FileInvoiceStore(notArray)).toThrow(/not an array/);
+  });
+
+  // "Single-instance only" in a doc comment is not a guarantee. Two processes
+  // each hold the whole map and rewrite the file wholesale, so the second to
+  // flush erases every invoice the first issued — and a rolling deploy runs two
+  // replicas for long enough to do it to in-flight paid invoices.
+  it('refuses to open a store another live process already holds', async () => {
+    const file = await tmpFile();
+    const first = new FileInvoiceStore(file);
     try {
-      expect(await s2.get('x')).toBeNull();
+      expect(() => new FileInvoiceStore(file)).toThrow(/already held by process/);
     } finally {
-      s2.close();
+      first.close();
     }
+    // Once released, the next instance opens cleanly.
+    const second = new FileInvoiceStore(file);
+    second.close();
   });
 
   it('rejects an empty path and a non-positive sweep interval', async () => {

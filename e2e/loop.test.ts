@@ -309,7 +309,7 @@ describe('full mock-mode loop (e2e)', () => {
     expect(attestation, 'attestation event for the paid call').toBeDefined();
   });
 
-  it('expired invoice (TTL 100ms) → 402 invoice_expired even with a valid payment', async () => {
+  it('expired invoice (TTL 100ms): paying LATE is refused, but paying in time and collecting late is honoured', async () => {
     // Dedicated gateway instance with a 100ms invoice TTL, same chain + oracle.
     const shortTtl = await startMiddleware({
       port: 0,
@@ -333,26 +333,42 @@ describe('full mock-mode loop (e2e)', () => {
       expect(challengeRes.status).toBe(402);
       const invoice = (await challengeRes.json()) as PaymentRequiredResponse;
 
-      // Pay correctly… but present the proof only after the invoice has expired.
+      // Let the quote LAPSE, then pay it. That payment bought nothing: the
+      // price it was quoted no longer stood, so it must be refused.
       const invoiceNonce = invoice.accepts[0]!.extra.nonce;
-      const { txHash } = await chain.transfer(
+      await sleep(250); // > 100ms TTL (the store retains expired invoices for the redemption window)
+      const late = await chain.transfer(
         { to: paymentTarget, amountWei: PRICE_WEI, nonce: invoiceNonce, serviceId },
         buyer,
       );
-      await sleep(250); // > 100ms TTL (the store keeps expired invoices around long enough)
-
-      const xPayment = encodeXPayment({
-        x402Version: X402_VERSION,
-        scheme: X402_SCHEME,
-        network: chain.network,
-        payload: { transaction: txHash, nonce: invoiceNonce },
-      });
+      const proofFor = (txHash: string, nonce: string): string =>
+        encodeXPayment({
+          x402Version: X402_VERSION,
+          scheme: X402_SCHEME,
+          network: chain.network,
+          payload: { transaction: txHash, nonce },
+        });
       const res = await fetch(`${shortGateway}/svc/${serviceId}`, {
-        headers: { 'X-PAYMENT': xPayment },
+        headers: { 'X-PAYMENT': proofFor(late.txHash, invoiceNonce) },
       });
       expect(res.status).toBe(402);
       const body = (await res.json()) as PaymentRequiredResponse;
       expect(body.error).toBe('invoice_expired');
+
+      // The other direction is the one that used to cost buyers money: pay
+      // while the invoice is valid, collect after it lapses. The payment is
+      // already irreversible on-chain, so refusing it would be taking the money
+      // and delivering nothing.
+      const fresh = (body.accepts[0]!).extra.nonce;
+      const inTime = await chain.transfer(
+        { to: paymentTarget, amountWei: PRICE_WEI, nonce: fresh, serviceId },
+        buyer,
+      );
+      await sleep(250); // present well after the 100ms TTL
+      const honoured = await fetch(`${shortGateway}/svc/${serviceId}`, {
+        headers: { 'X-PAYMENT': proofFor(inTime.txHash, fresh) },
+      });
+      expect(honoured.status).toBe(200);
     } finally {
       await shortTtl.close();
     }

@@ -64,6 +64,14 @@ export interface ZgExactPayload {
   nonce: string;
   /** Payer address, `0x` + 40 hex. */
   from?: string;
+  /**
+   * EIP-191 signature over `buildPaymentProofMessage(...)`, proving the
+   * presenter holds the key that paid. REQUIRED in live mode — the gateway
+   * refuses a proof without it, because {transaction, nonce} alone are readable
+   * off the public chain by anyone. Optional on the wire only so a missing
+   * signature can be reported as a precise 402 rather than a parse failure.
+   */
+  signature?: string;
 }
 
 export interface PaymentPayload {
@@ -91,6 +99,7 @@ export function toCaip2Network(chainId: number): Caip2Network {
 
 const NONCE_RE = /^\d{1,78}$/;            // uint256 decimal
 const TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/; // 0x + 32-byte transaction hash
+const SIGNATURE_RE = /^0x[0-9a-fA-F]{130}$/; // 0x + r(32) + s(32) + v(1)
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -133,6 +142,16 @@ export function decodeXPayment(header: string): PaymentPayload {
     payload: { transaction, nonce },
   };
   if (typeof payload['from'] === 'string') out.payload.from = payload['from'];
+  // Shape-check only. Whether a signature is REQUIRED, and whether it recovers
+  // to the on-chain payer, is the gateway's call (it needs the verified payer
+  // to compare against, which decoding cannot know). 0x + r(32)+s(32)+v(1).
+  const signature = payload['signature'];
+  if (signature !== undefined) {
+    if (typeof signature !== 'string' || !SIGNATURE_RE.test(signature)) {
+      throw badPayment('payload.signature must be a 0x-prefixed 65-byte secp256k1 signature');
+    }
+    out.payload.signature = signature;
+  }
   return out;
 }
 

@@ -2,6 +2,7 @@ import type { AnySigner, ChainClient, Logger, Wei } from '@agentgate/shared';
 import { AgentGateError, compareWei, parseWei } from '@agentgate/shared';
 import {
   encodeXPayment, decodeXPaymentResponse,
+  buildPaymentProofMessage,
   X402_VERSION, X402_SCHEME,
   type PaymentRequirements, type SettlementResponse,
 } from '@agentgate/shared';
@@ -286,8 +287,28 @@ export function createAgentGateClient(opts: AgentGateClientOpts): AgentGateClien
       );
     }
 
-    // Pay: call the PaymentRouter named in extra.router, carrying the invoice
-    // nonce and serviceId (PaymentRouter.pay(serviceId, nonce, payTo)).
+    // The invoice NAMES a router, but we settle through the one this client is
+    // configured with — so if they disagree, one of us is wrong about where the
+    // money goes. Previously extra.router was format-checked and then dropped on
+    // the floor (while the docs claimed we paid it), which made a router
+    // migration silently become paid-and-never-served: we would settle on the
+    // old router and the gateway would look for a Paid log on the new one.
+    if (
+      chain.routerAddress !== undefined &&
+      chain.routerAddress !== '' &&
+      reqs.extra.router.toLowerCase() !== chain.routerAddress.toLowerCase()
+    ) {
+      throw new AgentGateError(
+        'INVOICE_MISMATCH',
+        `invoice names PaymentRouter ${reqs.extra.router} but this client settles through ` +
+          `${chain.routerAddress} — refusing to pay a router the gateway is not watching`,
+        502,
+      );
+    }
+
+    // Pay: settle through the configured PaymentRouter (cross-checked against
+    // extra.router just above), carrying the invoice nonce and serviceId
+    // (PaymentRouter.pay(serviceId, nonce, payTo)).
     const { txHash } = await chain.transfer(
       {
         to: reqs.payTo,
@@ -301,13 +322,45 @@ export function createAgentGateClient(opts: AgentGateClientOpts): AgentGateClien
 
     await sleep(settleDelayMs);
 
+    // Sign the proof. {transaction, nonce} on their own are a BEARER TOKEN —
+    // PaymentRouter.Paid indexes serviceId and nonce, so anyone watching the
+    // chain can read both and redeem this invoice before we do. The signature
+    // binds the proof to the key that actually paid.
+    //
+    // Fail CLOSED: outside mock mode, a ChainClient that cannot sign means we
+    // would be sending a replayable proof, so refuse rather than pay.
+    let signature: string | undefined;
+    if (chain.network !== 'mock') {
+      if (typeof chain.signMessage !== 'function') {
+        throw new AgentGateError(
+          'SIGNER_UNSUPPORTED',
+          'this chain client cannot sign a payment proof, and an unsigned proof is ' +
+            'replayable by anyone watching the chain — refusing to present it',
+          500,
+        );
+      }
+      signature = await chain.signMessage(
+        buildPaymentProofMessage({
+          network: chain.network,
+          serviceId: reqs.extra.serviceId,
+          nonce: reqs.extra.nonce,
+          transaction: txHash,
+        }),
+        signer,
+      );
+    }
+
     // Retry with x402 proof header; on 402 + Retry-After (verification pending) retry up to 5×.
     const headers = new Headers(init?.headers);
     headers.set('X-PAYMENT', encodeXPayment({
       x402Version: X402_VERSION,
       scheme: X402_SCHEME,
       network: chain.network,
-      payload: { transaction: txHash, nonce: reqs.extra.nonce },
+      payload: {
+        transaction: txHash,
+        nonce: reqs.extra.nonce,
+        ...(signature !== undefined ? { signature } : {}),
+      },
     }));
     const proofInit: RequestInit = { ...init, headers };
 

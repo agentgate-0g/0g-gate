@@ -3,6 +3,7 @@ export * from './money';
 export * from './nonce';
 export * from './config';
 export * from './self-map';
+export * from './payment-proof';
 export * from './logger';
 export * from './trust';
 export * from './errors';

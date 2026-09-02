@@ -249,10 +249,18 @@ export async function runBuyerAgent(opts: RunBuyerAgentOpts): Promise<BuyerRunRe
   // price the budget gate just approved — NOT the whole remaining budget — so a
   // 402 invoice that quotes more than the advertised price is refused instead of
   // silently charged up to the full budget.
+  // expectPayTo/expectServiceId bind the payment to what the REGISTRY says, not
+  // to what the gateway's 402 claims. Without them this path enforced only the
+  // price: a seller can list one payout address on-chain and invoice a different
+  // one, and a compromised or MITM'd gateway can redirect the money outright.
+  // `agentgate buy` has always passed both; this autonomous path — the one
+  // spending without a human watching — did not.
   const client = createAgentGateClient({
     chain,
     signer,
     maxPriceWei: price,
+    expectPayTo: chosen.service.paymentTarget,
+    expectServiceId: chosen.service.id,
     logger,
     ...(opts.settleDelayMs !== undefined ? { settleDelayMs: opts.settleDelayMs } : {}),
     ...(opts.fetchImpl !== undefined ? { fetchImpl: opts.fetchImpl } : {}),

@@ -316,19 +316,52 @@ describe('paywall flow (mock mode)', () => {
 });
 
 describe('expired invoices', () => {
-  it('a proof presented after INVOICE_TTL_MS → 402 invoice_expired + fresh invoice', async () => {
+  // What matters is when the buyer PAID, not when they got around to
+  // collecting. This used to 402: the expiry was checked before the chain was
+  // ever read, so a payment that settled while the invoice was valid but
+  // arrived a moment late was refused — with the OG already forwarded to the
+  // seller and no refund anywhere in the contract set.
+  it('a payment made INSIDE the TTL is still honoured when presented after it', async () => {
     const gw = await bootGateway({ config: testConfig({ invoiceTtlMs: 60 }) });
     const upstream = await startUpstream();
     try {
       gw.fake.addService({ id: 1 });
       await adminMap(gw, 1, `${upstream.url}/data`);
-      const proof = await payInvoice(gw, 1);
-      await sleep(120);
+      const proof = await payInvoice(gw, 1); // pays while the invoice is valid
+      await sleep(120);                      // ...and collects after it lapsed
       const res = await fetch(`${gw.baseUrl}/svc/1`, { headers: proofHeaders(proof) });
+      expect(res.status).toBe(200);
+      expect(upstream.seen.length).toBe(1);
+    } finally {
+      await gw.close();
+      await upstream.close();
+    }
+  });
+
+  it('a payment made AFTER the invoice lapsed is refused — the quote no longer stood', async () => {
+    const gw = await bootGateway({ config: testConfig({ invoiceTtlMs: 60 }) });
+    const upstream = await startUpstream();
+    try {
+      gw.fake.addService({ id: 1 });
+      await adminMap(gw, 1, `${upstream.url}/data`);
+      const challenge = await fetch(`${gw.baseUrl}/svc/1`);
+      const req = ((await challenge.json()) as PaymentRequiredResponse).accepts[0]!;
+      await sleep(120); // let the quote lapse BEFORE paying it
+      const { txHash } = await gw.fake.transfer(
+        {
+          to: req.payTo, amountWei: req.maxAmountRequired,
+          nonce: req.extra.nonce, serviceId: req.extra.serviceId,
+        },
+        { kind: 'mock', publicKey: `0x${'99'.repeat(20)}` },
+      );
+      const res = await fetch(`${gw.baseUrl}/svc/1`, {
+        headers: proofHeaders({ txHash, nonce: req.extra.nonce, network: req.network }),
+      });
       expect(res.status).toBe(402);
       const body = (await res.json()) as PaymentRequiredResponse;
       expect(body.error).toBe('invoice_expired');
-      expect(body.accepts[0]!.extra.nonce).not.toBe(proof.nonce);
+      expect(body.accepts[0]!.extra.nonce).not.toBe(req.extra.nonce);
+      expect(upstream.seen.length).toBe(0);
     } finally {
       await gw.close();
       await upstream.close();
