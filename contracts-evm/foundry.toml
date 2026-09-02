@@ -10,8 +10,47 @@ optimizer_runs = 200
 via_ir = false
 evm_version = "cancun"
 
+# Invariant budget, set explicitly rather than left at Foundry's default
+# (256 runs x 500 calls). The handlers in test/Invariants.t.sol move real
+# value on every accepted call, so the default budget costs about 40 seconds
+# per property for coverage the handlers reach in the first few hundred calls.
+#
+# fail_on_revert stays FALSE deliberately, and the handlers depend on it: they
+# generate calls that MUST be refused — an over-budget debit, a duplicate
+# nonce, an underpayment, a withdrawal larger than the balance — because the
+# property under test is what the books look like after a rule refuses a call.
+# The ghost counters printed by each afterInvariant are how a reader checks
+# the run was not all reverts.
+[invariant]
+runs = 64
+depth = 128
+fail_on_revert = false
+
 [rpc_endpoints]
 galileo = "${ZG_RPC_URL}"
+# Mainnet is a LITERAL, not "${ZG_RPC_URL}" like galileo above, and that is
+# deliberate. `--rpc-url galileo` resolves to whatever ZG_RPC_URL holds, so an
+# operator with mainnet exported in their shell deploys to mainnet while every
+# word on screen says testnet — and these contracts are immutable and permanent
+# once they land. A network whose URL is written down here cannot be aliased
+# onto another chain by an environment variable. See also `runOnChain(uint256)`
+# in script/Deploy.s.sol, which refuses to deploy to a chain you did not name.
+mainnet = "https://evmrpc.0g.ai"
 
+# Contract verification. The path is `/open/api`, NOT `/api`: `/api` on both 0G
+# explorers serves the explorer's own single-page app, so a verify posted there
+# gets HTML back instead of JSON. `/open/api` answers the Etherscan-compatible
+# API on both hosts and lists `verifysourcecode` and `checkverifystatus` among
+# its actions, which is what `forge verify-contract` drives; it is also the
+# apiURL the 0G docs give for Hardhat. Both URLs were confirmed by request
+# against the live explorers, and the galileo entry is corrected here for the
+# same reason — as written it could never have verified anything.
+#
+# ZG_EXPLORER_API_KEY must be set to something non-empty for Foundry to accept
+# the profile. The 0G explorers answered these API paths unauthenticated, so
+# whether they enforce a key on `verifysourcecode` specifically is not
+# established here; if verification is rejected for the key, that is where to
+# look first.
 [etherscan]
-galileo = { key = "${ZG_EXPLORER_API_KEY}", url = "https://chainscan-galileo.0g.ai/api", chain = 16602 }
+galileo = { key = "${ZG_EXPLORER_API_KEY}", url = "https://chainscan-galileo.0g.ai/open/api", chain = 16602 }
+mainnet = { key = "${ZG_EXPLORER_API_KEY}", url = "https://chainscan.0g.ai/open/api", chain = 16661 }

@@ -16,7 +16,28 @@ contract SpendGuard {
     /// trap `openPolicy`'s other checks exist to prevent.
     uint8 public constant MAX_TRUST_TIER = 2;
 
+    /// Hard ceiling on `maxCallsInWindow`, and therefore on how many entries
+    /// the rate window can ever hold.
+    ///
+    /// The window used to be an unbounded uint32 over a list the debit path
+    /// rebuilt in full on every call: it scanned every timestamp, copied the
+    /// survivors into memory, popped the storage array down and wrote them all
+    /// back. At a window of 1024 entries that one debit cost 2,180,345 gas
+    /// against 96,572 for the same call over the ring below, and the fill
+    /// needed to reach that state ran past forge's default billion-gas ceiling.
+    /// A policy configured for throughput could therefore price its own `debit`
+    /// out of existence with the escrow sitting behind it, reachable only by
+    /// `withdraw`. The ring makes the cost independent of how full the window
+    /// is; this constant bounds the one thing the ring still scales with, which
+    /// is the storage the array occupies.
+    uint32 public constant MAX_CALLS_IN_WINDOW = 1024;
+
     /// policyId => serviceId => may this policy pay it?
+    ///
+    /// Consulted on EVERY debit. It was once conditional on a per-policy
+    /// `restrictToAllowlist` flag, and that flag is gone — see the long note on
+    /// `debit`'s allowlist check for why a policy without one has no
+    /// counterparty rule at all.
     mapping(uint64 => mapping(uint64 => bool)) public serviceAllowed;
 
     /// The registry this guard reads scores and payout targets from.
@@ -37,12 +58,10 @@ contract SpendGuard {
         uint256 perCallCap;
         uint64 windowMs;
         uint32 maxCallsInWindow;
+        /// A NARROWING filter over the owner's allowlist, never a substitute
+        /// for one: it can take a listed counterparty away, it can never add an
+        /// unlisted one. See `debit`.
         uint8 minTrustTier;
-        /// When true, `debit` only pays serviceIds the OWNER listed. Registration
-        /// is permissionless, so without this the payee and tier rules are both
-        /// satisfiable by a registry entry the gate writes for itself — the
-        /// firewall would bind nothing a rogue gate could not mint.
-        bool restrictToAllowlist;
         bool paused;
         uint64 createdAt; // unix MS
     }
@@ -86,7 +105,10 @@ contract SpendGuard {
     );
     event ServiceAllowedChanged(uint64 indexed policyId, uint64 indexed serviceId, bool allowed);
     event PolicyPaused(uint64 indexed policyId, bool paused);
-    event Withdrawn(uint64 indexed policyId, uint256 amount, uint256 remaining);
+    /// `to` is part of the record because the recipient is a parameter now: an
+    /// owner watching its own escrow has to be able to see WHERE a withdrawal
+    /// went, not just that one happened.
+    event Withdrawn(uint64 indexed policyId, uint256 amount, address to, uint256 remaining);
 
     /// Number of policies opened; ids are 1-based (1..=policiesCount).
     uint64 public policiesCount;
@@ -97,8 +119,18 @@ contract SpendGuard {
     /// would collide across services inside one policy and block a legitimate
     /// call the first time two sellers happened to issue the same number.
     mapping(uint64 => mapping(bytes32 => bool)) public seenRefs;
-    /// policyId => approved-debit timestamps (ms) inside the live rate window.
+
+    /// policyId => approved-debit timestamps (ms) as a RING BUFFER of at most
+    /// `maxCallsInWindow` entries. Never pruned: an entry is overwritten by the
+    /// call that displaces it and by nothing else, so the array grows to the
+    /// policy's cap once and then stays that size forever.
     mapping(uint64 => uint64[]) private _callTimes;
+    /// policyId => the ring slot the NEXT approved debit will write.
+    ///
+    /// Once the ring is full that slot also holds the OLDEST timestamp — the
+    /// one about to be displaced — which is the whole reason the rate check can
+    /// be a single read. See `debit`.
+    mapping(uint64 => uint32) private _ringCursor;
 
     /// @notice Open a spend policy; the caller becomes its owner.
     function openPolicy(
@@ -107,21 +139,27 @@ contract SpendGuard {
         uint256 perCallCap,
         uint64 windowMs,
         uint32 maxCallsInWindow,
-        uint8 minTrustTier,
-        bool restrictToAllowlist
+        uint8 minTrustTier
     ) external returns (uint64 policyId) {
         // A policy that could accept deposits but never debit is a funds trap.
         //
         // windowMs is floored at one second because _nowMs() advances in
-        // 1000ms steps: every `nowMs - times[i]` is a multiple of 1000, so a
-        // window of 0 prunes even the entry written in this block and any
-        // window <= 1000 collapses to same-block-only. Either way keptLen
-        // stays 0, `keptLen >= maxCallsInWindow` never fires, and the policy
+        // 1000ms steps: every `nowMs - t` is a multiple of 1000, so a window of
+        // 0 ages out even the entry written in this block and any window
+        // <= 1000 collapses to same-block-only. Either way the ring never
+        // reports a live entry, `RateExceeded` never fires, and the policy
         // advertises a rate cap it does not enforce.
+        //
+        // maxCallsInWindow is capped at MAX_CALLS_IN_WINDOW because the ring is
+        // allocated one entry per approved call up to that number, and an
+        // owner who asked for 2^32 slots would be paying for storage the
+        // policy's own budget could never fill — see the constant's note for
+        // the gas figures that made this a funds trap rather than a nuisance.
         if (
             perCallCap == 0 || maxCallsInWindow == 0 || budget == 0
                 || perCallCap > budget || windowMs < 1000 || gate == address(0)
                 || minTrustTier > MAX_TRUST_TIER
+                || maxCallsInWindow > MAX_CALLS_IN_WINDOW
         ) {
             revert InvalidConfig();
         }
@@ -137,7 +175,6 @@ contract SpendGuard {
             windowMs: windowMs,
             maxCallsInWindow: maxCallsInWindow,
             minTrustTier: minTrustTier,
-            restrictToAllowlist: restrictToAllowlist,
             paused: false,
             createdAt: _nowMs()
         });
@@ -185,14 +222,31 @@ contract SpendGuard {
         // It used to be a `uint8 trustTier` parameter supplied by `p.gate` —
         // the exact party this rule exists to constrain — so `255` made the
         // check unreachable and the firewall's trust rule decorative.
+        //
+        // What it is NOT is a counterparty rule. `_tierOf` reads a score that
+        // an attacker mints for himself: register a service paying an address
+        // he owns, send it 25 payments from a second address he owns (the OG
+        // lands back in his own pocket, so only gas is burned), attest each
+        // from a third, and the service stands at the top of this scale. The
+        // rule below is therefore a NARROWING filter over the set the owner
+        // already approved — it can disqualify a listed service whose track
+        // record has gone bad, and it can never qualify one nobody listed.
         if (_tierOf(serviceId) < p.minTrustTier) revert UntrustedService();
 
-        // The gate must not be able to pick its own counterparty. Registration
-        // is permissionless, so it can mint a service whose paymentTarget is
-        // its own address and satisfy every other rule here.
-        if (p.restrictToAllowlist && !serviceAllowed[policyId][serviceId]) {
-            revert ServiceNotAllowed();
-        }
+        // The owner's allowlist, and the ONLY rule here that a rogue gate
+        // cannot satisfy by writing the registry entry itself.
+        //
+        // This check was once conditional on a per-policy `restrictToAllowlist`
+        // flag, and `openPolicy` accepted a policy with the flag off. That
+        // combination had no counterparty rule left standing: registration is
+        // permissionless, so a gate could mint a service whose paymentTarget is
+        // its own address, buy it the top tier as described above, and then
+        // bill the escrow up to `budget` — every other rule in this function
+        // (payee, price, per-call cap, rate) is satisfied by construction when
+        // the gate wrote the listing it is billing against. The flag is gone
+        // rather than defaulted, because an escrow whose counterparty set is
+        // "whatever the spender registers" is not a firewall in any mode.
+        if (!serviceAllowed[policyId][serviceId]) revert ServiceNotAllowed();
 
         // Bind the money to the service it is charged against — both WHO is
         // paid and HOW MUCH. perCallCap alone left the amount asserted by the
@@ -207,20 +261,28 @@ contract SpendGuard {
         uint256 newSpent = p.spent + amount;
         if (amount > p.balance || newSpent > p.budget) revert OverBudget();
 
-        // Rate window: prune entries older than the window, then check the cap.
-        // The age test (now - t < window) is underflow-safe and correct at t=0,
-        // unlike a `t > now - window` cutoff which saturates.
+        // ── rate window ──────────────────────────────────────────────────────
+        //
+        // "Are `maxCallsInWindow` approved calls already inside the window?" is
+        // ONE storage read, because timestamps only ever increase. Entries are
+        // written in ascending order around the ring, so the slot the next call
+        // will overwrite — `cursor` — holds the oldest of them; and the ring
+        // only reaches `maxCallsInWindow` entries by having that many approved
+        // calls behind it. If the ring is full and its oldest entry is still
+        // inside the window then all of them are, and the cap is reached. If
+        // the oldest has aged out, at most maxCallsInWindow-1 remain and there
+        // is room. Nothing here depends on how many entries the window holds,
+        // which is exactly the property the old prune-and-rebuild lacked.
+        //
+        // The age test is `now - t < window` rather than `t > now - window`:
+        // the latter underflows to a saturated cutoff for any `now` inside the
+        // first `window` milliseconds of the epoch and would age out nothing.
         uint64 nowMs = _nowMs();
         uint64[] storage times = _callTimes[policyId];
-        uint64[] memory kept = new uint64[](times.length);
-        uint256 keptLen = 0;
-        for (uint256 i = 0; i < times.length; i++) {
-            if (nowMs - times[i] < p.windowMs) {
-                kept[keptLen] = times[i];
-                keptLen++;
-            }
+        uint32 cursor = _ringCursor[policyId];
+        if (times.length == p.maxCallsInWindow && nowMs - times[cursor] < p.windowMs) {
+            revert RateExceeded();
         }
-        if (keptLen >= p.maxCallsInWindow) revert RateExceeded();
 
         // ── all checks passed: settle atomically ──
         // Checks-effects-interactions: every write lands before the transfer.
@@ -229,10 +291,17 @@ contract SpendGuard {
         p.spent = newSpent;
         seenRefs[policyId][ref] = true;
 
-        // Rewrite the pruned window plus this call.
-        while (times.length > keptLen) times.pop();
-        for (uint256 i = 0; i < keptLen; i++) times[i] = kept[i];
-        times.push(nowMs);
+        // Grow the ring until it reaches the policy's cap, then reuse slots.
+        // The cursor advances on BOTH paths, so by the time the last slot is
+        // pushed it has already wrapped to 0 — the index of the oldest entry —
+        // and the invariant the check above relies on holds from the first
+        // moment the ring is full.
+        if (times.length < p.maxCallsInWindow) {
+            times.push(nowMs);
+        } else {
+            times[cursor] = nowMs;
+        }
+        _ringCursor[policyId] = (cursor + 1) % p.maxCallsInWindow;
 
         // Settle THROUGH the router, not directly. A direct transfer paid the
         // seller but produced no settlement, so recordAttestation reverted
@@ -243,6 +312,16 @@ contract SpendGuard {
         // payer of record. The router forwards the value straight on and
         // custodies nothing; its own revert propagates rather than being
         // flattened into TransferFailed.
+        //
+        // `nonce` is passed THROUGH, unchanged and un-namespaced, and that is
+        // deliberate. An audit proposed mixing `policyId` into it to stop two
+        // policies colliding at the router. It must not happen: the gateway
+        // verifies a payment by matching the indexed `nonce` on `Paid` against
+        // the one it issued in the 402, so a rewritten nonce makes every
+        // escrow-paid call unverifiable — the buyer's money is gone and the
+        // call is never served. The collision the audit worried about is
+        // already impossible, because the router keys its settlements on
+        // (serviceId, nonce, PAYER, payTo) and the payer here is this contract.
         REGISTRY.ROUTER().pay{value: amount}(serviceId, nonce, payTo);
 
         emit DebitApproved(policyId, serviceId, amount, payTo, ref, remaining);
@@ -250,6 +329,13 @@ contract SpendGuard {
 
     /// Payee and price must both match what the service registered. Kept in
     /// its own frame: inlined, its two locals push `debit` over the stack limit.
+    ///
+    /// `settlementTermsOf` reverts `ServiceInactive` for a service its own
+    /// owner has switched off, and that revert is allowed to propagate rather
+    /// than being caught and turned into a softer failure. `active` is the
+    /// seller's kill switch; an escrow that swallowed it would keep paying a
+    /// service that has declared itself unable to serve, which is the exact
+    /// shape of "paid for and never delivered" the firewall exists to prevent.
     function _requireSettlementTerms(uint64 serviceId, address payTo, uint256 amount)
         internal
         view
@@ -272,8 +358,8 @@ contract SpendGuard {
 
     /// @notice Allow (or revoke) one service for this policy. Owner only —
     ///         the whole point is that the GATE cannot choose its own
-    ///         counterparties. No-op unless the policy was opened with
-    ///         `restrictToAllowlist`.
+    ///         counterparties. A policy pays nothing until its owner has
+    ///         listed it here.
     function setServiceAllowed(uint64 policyId, uint64 serviceId, bool allowed) external {
         Policy storage p = _loadPolicy(policyId);
         if (msg.sender != p.owner) revert NotAuthorized();
@@ -281,22 +367,47 @@ contract SpendGuard {
         emit ServiceAllowedChanged(policyId, serviceId, allowed);
     }
 
-    /// @notice Withdraw unspent escrow back to the owner. Owner only. Works
-    ///         while paused, so it doubles as the post-kill-switch recovery path.
+    /// @notice Withdraw unspent escrow to an address the OWNER names. Owner
+    ///         only. Works while paused, so it doubles as the post-kill-switch
+    ///         recovery path.
+    ///
+    /// The recipient is a parameter because the owner of a policy is normally a
+    /// contract — an agent controller, a factory, a multisig. One that cannot
+    /// accept value (no payable receive, or a fallback that reverts) could
+    /// never be paid by the old hardcoded `to = p.owner`, and since a debit is
+    /// the only other way escrow leaves this contract, its balance was stranded
+    /// permanently with no rescue and no ownership transfer to escape through.
+    function withdraw(uint64 policyId, uint256 amount, address to) external {
+        _withdraw(policyId, amount, to);
+    }
+
+    /// @notice Withdraw unspent escrow back to the policy owner. Owner only.
+    ///
+    /// Kept as an overload rather than replaced: this is the signature every
+    /// deployed caller and every off-chain script already uses, and changing
+    /// `withdraw`'s arity under them would turn each of those calls into a
+    /// revert against a contract holding their money.
     function withdraw(uint64 policyId, uint256 amount) external {
+        _withdraw(policyId, amount, _loadPolicy(policyId).owner);
+    }
+
+    function _withdraw(uint64 policyId, uint256 amount, address to) internal {
         Policy storage p = _loadPolicy(policyId);
         if (msg.sender != p.owner) revert NotAuthorized();
         if (amount == 0) revert ZeroAmount();
+        // Same hazard as `debit`'s payee check: a CALL to address(0) with value
+        // returns success and burns it, so an unguarded rescue would report a
+        // withdrawal, zero the balance and destroy the funds.
+        if (to == address(0)) revert ZeroPayTo();
         if (amount > p.balance) revert OverBudget();
 
         uint256 remaining = p.balance - amount;
-        address to = p.owner;
         p.balance = remaining;
 
         (bool ok, ) = to.call{value: amount}("");
         if (!ok) revert TransferFailed();
 
-        emit Withdrawn(policyId, amount, remaining);
+        emit Withdrawn(policyId, amount, to, remaining);
     }
 
     /// @notice Pause / unpause a policy. Owner only.
