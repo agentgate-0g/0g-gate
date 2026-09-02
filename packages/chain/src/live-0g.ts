@@ -21,6 +21,32 @@ import { PAYMENT_ROUTER_ABI, REGISTRY_ABI } from './abi';
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 /**
+ * How many services one `listServices()` call will read.
+ *
+ * Registration is permissionless and nearly free, and the dashboard serves the
+ * catalog from an unauthenticated route, so the fan-out is otherwise chosen by
+ * whoever registers the most services. The cap is applied to the LOW ids on
+ * purpose: a spammer then pushes his OWN entries past it instead of evicting
+ * everyone else's, which is what taking the newest N would do.
+ */
+const MAX_LISTED_SERVICES = 200;
+
+/**
+ * How long one catalog read is reused. Short enough that a registration shows
+ * up on the next dashboard poll, long enough that a burst of anonymous requests
+ * costs one pass over the registry instead of one per request.
+ */
+const SERVICES_CACHE_TTL_MS = 5_000;
+
+/**
+ * How long a locally-remembered next nonce is trusted over the node's own
+ * pending count. See `sendTx` — it covers the window where a load-balanced RPC
+ * has not yet counted our previous transaction, and expires so that a
+ * transaction dropped from the mempool cannot strand the account forever.
+ */
+const NONCE_FLOOR_TTL_MS = 30_000;
+
+/**
  * `0x` + 32 bytes of hex. Two distinct things happen to share this shape here:
  * a transaction hash and a secp256k1 private key. Both are checked BEFORE
  * being handed to viem — for the hash so a malformed one is a clean verdict
@@ -128,6 +154,8 @@ interface PendingEvent {
  */
 export class Live0gClient implements ChainClient {
   readonly network: string;
+  /** The router this client settles through — see ChainClient.routerAddress. */
+  readonly routerAddress: string;
   private readonly cfg: AgentGateConfig;
   private readonly chain: Chain;
   private readonly pub: PublicClient;
@@ -135,6 +163,7 @@ export class Live0gClient implements ChainClient {
   constructor(config: AgentGateConfig) {
     this.cfg = config;
     this.network = config.zgNetwork;
+    this.routerAddress = config.paymentRouterAddress;
     this.chain = defineChain({
       id: config.zgChainId,
       name: config.zgNetwork,
@@ -144,9 +173,90 @@ export class Live0gClient implements ChainClient {
     this.pub = createPublicClient({ chain: this.chain, transport: http(config.zgRpcUrl) });
   }
 
-  /** Cheap reachability probe for readiness checks. */
+  /**
+   * Cheap reachability probe for readiness checks — and, once per process, a
+   * proof that the node on the other end is the chain we think it is and that
+   * our contracts actually exist on it. See `assertChainIdentity`.
+   */
   async ping(): Promise<void> {
     await this.pub.getBlockNumber();
+    await this.assertChainIdentity();
+  }
+
+  /**
+   * Verify, ONCE, that (a) the RPC reports the chain id we were configured with
+   * and (b) the registry and router addresses hold code on it.
+   *
+   * Neither was checked anywhere before, and the combination is how real money
+   * gets burned on a mainnet cutover. `ZG_CHAIN_ID` only ever fed
+   * `defineChain({id})`, which viem takes on trust for a local account — it
+   * never asks the node. And the contract addresses default to the Galileo
+   * TESTNET deployment, so an operator who repoints `ZG_RPC_URL` at mainnet and
+   * forgets the rest gets a client that is confidently wrong.
+   *
+   * The address half matters more than it looks: a value-bearing CALL to an
+   * address with NO CODE succeeds. `eth_estimateGas` returns intrinsic gas, the
+   * transaction mines with `status: 'success'`, and `settled()` — which only
+   * inspects `receipt.status` — reports it as a completed payment. The buyer's
+   * OG is then sitting at an address nobody holds a key for, and
+   * `verifyTransfer` 402s forever because no `Paid` log was ever emitted.
+   *
+   * Cached as a promise so concurrent callers share one round-trip, and so a
+   * failure is re-raised to every caller instead of being silently swallowed by
+   * whoever happened to lose the race.
+   */
+  private identityChecked: Promise<void> | undefined;
+  async assertChainIdentity(): Promise<void> {
+    this.identityChecked ??= this.checkChainIdentity();
+    try {
+      await this.identityChecked;
+    } catch (err) {
+      // Never cache a failure: a transient RPC blip must not permanently brick
+      // an otherwise healthy gateway.
+      this.identityChecked = undefined;
+      throw err;
+    }
+  }
+
+  /** The chain id the NODE reports — surfaced by the gateway's /metrics so an
+   *  operator can see a configuration/reality disagreement directly. */
+  async observedChainId(): Promise<number> {
+    return this.pub.getChainId();
+  }
+
+  private async checkChainIdentity(): Promise<void> {
+    const observed = await this.pub.getChainId();
+    if (observed !== this.cfg.zgChainId) {
+      throw new AgentGateError(
+        'CHAIN_ID_MISMATCH',
+        `${this.cfg.zgRpcUrl} reports chain id ${observed}, but this process is configured ` +
+          `for ${this.cfg.zgChainId} (${this.cfg.zgNetwork}). Refusing to sign or trust reads ` +
+          'against a chain that is not the one the contract addresses belong to.',
+        503,
+      );
+    }
+    // Only check what is actually configured — a read-only client legitimately
+    // runs without a router, and `router()`/`registry()` already fail closed
+    // with a clearer message when one is needed but unset.
+    const wanted: [string, string][] = [];
+    if (this.cfg.registryContractAddress !== '') {
+      wanted.push(['REGISTRY_CONTRACT_ADDRESS', this.cfg.registryContractAddress]);
+    }
+    if (this.cfg.paymentRouterAddress !== '') {
+      wanted.push(['PAYMENT_ROUTER_ADDRESS', this.cfg.paymentRouterAddress]);
+    }
+    for (const [label, address] of wanted) {
+      const code = await this.pub.getCode({ address: normalizeAddress(address) as `0x${string}` });
+      if (code === undefined || code === '0x') {
+        throw new AgentGateError(
+          'CONTRACT_NOT_DEPLOYED',
+          `${label}=${address} has no code on chain ${this.cfg.zgChainId} (${this.cfg.zgNetwork}). ` +
+            'This is what a testnet address left over on a mainnet config looks like. ' +
+            'A payment sent to a codeless address SUCCEEDS on-chain and is unrecoverable.',
+          503,
+        );
+      }
+    }
   }
 
   private registry(): `0x${string}` {
@@ -212,15 +322,54 @@ export class Live0gClient implements ChainClient {
     }
   }
 
+  /**
+   * The service catalog, oldest id first.
+   *
+   * Every caller of this is anonymous — the dashboard serves it from an
+   * unauthenticated route — and it used to cost one uncached `eth_call` per
+   * registered service, with a single bad entry taking the whole catalog down
+   * for everyone. Three guards, and the ORDER and SHAPE of the result are
+   * unchanged by all of them:
+   *
+   *  - bounded at MAX_LISTED_SERVICES, so what an anonymous request costs is
+   *    not a number a spammer chooses;
+   *  - per-entry isolated, so one service that reverts or fails to decode is
+   *    skipped rather than fatal — but a catalog where EVERY read failed still
+   *    throws, because an unreachable node must not render as "no services";
+   *  - cached for SERVICES_CACHE_TTL_MS, with concurrent callers sharing the
+   *    in-flight read, which is what collapses a burst into one pass.
+   */
+  private servicesCache: { at: number; value: Promise<ServiceRecord[]> } | undefined;
   async listServices(): Promise<ServiceRecord[]> {
+    const fresh = this.servicesCache;
+    // A copy per caller: the cache hands the same array to everyone and
+    // consumers sort and splice the list they are given.
+    if (fresh && Date.now() - fresh.at < SERVICES_CACHE_TTL_MS) return [...(await fresh.value)];
+    const entry = { at: Date.now(), value: this.readServices() };
+    this.servicesCache = entry;
+    try {
+      return [...(await entry.value)];
+    } catch (err) {
+      // Never cache a failure: a transient RPC blip must not blank the catalog
+      // for the rest of the TTL.
+      if (this.servicesCache === entry) this.servicesCache = undefined;
+      throw err;
+    }
+  }
+
+  private async readServices(): Promise<ServiceRecord[]> {
     const count = await this.pub.readContract({
       address: this.registry(), abi: REGISTRY_ABI, functionName: 'servicesCount',
     });
-    const total = Number(count);
-    if (total === 0) return [];
+    const total = Math.min(Number(count), MAX_LISTED_SERVICES);
+    if (total <= 0) return [];
     const ids = Array.from({ length: total }, (_, i) => i + 1);
-    const settled = await Promise.all(ids.map((id) => this.getService(id)));
-    return settled.filter((s): s is ServiceRecord => s !== null);
+    const settled = await Promise.allSettled(ids.map((id) => this.getService(id)));
+    // An unregistered id resolves to null and is simply absent; only a THROWN
+    // read is a failure, and only every read failing is fatal.
+    const failed = settled.filter((r) => r.status === 'rejected');
+    if (failed.length === settled.length) throw (failed[0] as PromiseRejectedResult).reason;
+    return settled.flatMap((r) => (r.status === 'fulfilled' && r.value !== null ? [r.value] : []));
   }
 
   async getScore(id: number): Promise<ServiceScore> {
@@ -423,6 +572,58 @@ export class Live0gClient implements ChainClient {
     return createWalletClient({ account, chain: this.chain, transport: http(this.cfg.zgRpcUrl) });
   }
 
+  /** Per-signing-address send queue, and the nonce that address should use next. */
+  private readonly sendQueue = new Map<string, Promise<unknown>>();
+  private readonly nonceFloor = new Map<string, { nonce: number; at: number }>();
+
+  /**
+   * Serialize transaction SENDS per signing address, and never hand out a nonce
+   * twice.
+   *
+   * viem derives the nonce inside `writeContract` by asking the node for the
+   * account's PENDING count, so writes started concurrently from one account
+   * all read the same number and all but one is rejected ("nonce too low") or
+   * replaces its sibling. The gateway does exactly that: `scheduleAttestation`
+   * is fire-and-forget per served call (packages/middleware/src/app.ts), so a
+   * burst of paid calls attests concurrently on the ONE gate key. The writes
+   * fail, the durable attestation queue drops an entry only once its attempt
+   * confirms, and it therefore replays them forever without ever draining.
+   *
+   * Only the send is serialized, not the receipt wait: transactions from one
+   * account mine in nonce order regardless, and holding the queue open for a
+   * receipt would cost a whole block per attestation.
+   *
+   * `nonceFloor` is a floor, not a counter, and it advances only AFTER a send
+   * the node accepted. Reserving a nonce before the send — what viem's own
+   * `nonceManager` does, since it consumes ahead of gas estimation — leaves a
+   * permanent gap whenever a send fails pre-flight, and a duplicate attestation
+   * is exactly that failure on the path the queue replays most. Every later
+   * transaction would then sit unminable behind a nonce that is never sent.
+   */
+  private async sendTx(
+    address: `0x${string}`, send: (nonce: number) => Promise<Hash>,
+  ): Promise<Hash> {
+    const key = address.toLowerCase();
+    const prior = this.sendQueue.get(key) ?? Promise.resolve();
+    const run = prior.then(async () => {
+      const pending = await this.pub.getTransactionCount({ address, blockTag: 'pending' });
+      // 0G's public RPC is load-balanced (see `settled`), so the node answering
+      // this is not necessarily the one that accepted our previous transaction
+      // moments ago — trust our own count while it is fresh.
+      const floor = this.nonceFloor.get(key);
+      const nonce = floor && floor.nonce > pending && Date.now() - floor.at < NONCE_FLOOR_TTL_MS
+        ? floor.nonce
+        : pending;
+      const hash = await send(nonce);
+      this.nonceFloor.set(key, { nonce: nonce + 1, at: Date.now() });
+      return hash;
+    });
+    // The queue must survive a failed send: chaining the raw promise would let
+    // one rejection deadlock every later write from this address.
+    this.sendQueue.set(key, run.catch(() => undefined));
+    return run;
+  }
+
   /**
    * Wait for `hash` to be mined and REQUIRE that it succeeded.
    *
@@ -521,9 +722,9 @@ export class Live0gClient implements ChainClient {
     input: RegisterServiceInput, signer: AnySigner,
   ): Promise<{ serviceId: number; txHash: string }> {
     const wallet = this.walletFor(signer);
-    const hash = await wallet.writeContract({
+    const hash = await this.sendTx(wallet.account.address, (nonce) => wallet.writeContract({
       address: this.registry(), abi: REGISTRY_ABI, functionName: 'registerService',
-      chain: this.chain, account: wallet.account,
+      chain: this.chain, account: wallet.account, nonce,
       args: [
         input.name, input.description,
         // endpointUrl carries the gateway BASE url on input (SPEC §9); the
@@ -536,8 +737,13 @@ export class Live0gClient implements ChainClient {
         normalizeAddress(input.paymentTarget) as `0x${string}`,
         normalizeAddress(input.attestor) as `0x${string}`,
       ],
-    });
+    }));
     const receipt = await this.settled(hash, 'registerService');
+    // Our own registration must be visible to our own next read: the CLI wraps
+    // a service and immediately lists, and a stale catalog there reads as "the
+    // registration did not happen" — inviting a second one, which mints a
+    // second service that cannot be deleted.
+    this.servicesCache = undefined;
     // The id is assigned on-chain; read it back from the event rather than
     // racing servicesCount(), which another registration could have bumped
     // between our tx landing and our read.
@@ -578,11 +784,11 @@ export class Live0gClient implements ChainClient {
     const wallet = this.walletFor(signer);
     let hash: Hash;
     try {
-      hash = await wallet.writeContract({
+      hash = await this.sendTx(wallet.account.address, (txNonce) => wallet.writeContract({
         address: this.registry(), abi: REGISTRY_ABI, functionName: 'recordAttestation',
-        chain: this.chain, account: wallet.account,
+        chain: this.chain, account: wallet.account, nonce: txNonce,
         args: [serviceId, nonce, payer, paymentTxHash, input.success],
-      });
+      }));
     } catch (err) {
       // Measured, not assumed: for an already-mined duplicate this is the path
       // that fires. viem's pre-flight gas estimation reverts, so no transaction
@@ -600,12 +806,15 @@ export class Live0gClient implements ChainClient {
 
   async setActive(serviceId: number, active: boolean, signer: AnySigner): Promise<{ txHash: string }> {
     const wallet = this.walletFor(signer);
-    const hash = await wallet.writeContract({
+    const hash = await this.sendTx(wallet.account.address, (nonce) => wallet.writeContract({
       address: this.registry(), abi: REGISTRY_ABI, functionName: 'setActive',
-      chain: this.chain, account: wallet.account,
+      chain: this.chain, account: wallet.account, nonce,
       args: [requireServiceId(serviceId), active],
-    });
+    }));
     await this.settled(hash, 'setActive');
+    // `active` is part of every cached ServiceRecord, so a de-listing this
+    // process just made must not keep being served as live.
+    this.servicesCache = undefined;
     return { txHash: hash };
   }
 
@@ -618,17 +827,48 @@ export class Live0gClient implements ChainClient {
     input: { to: string; amountWei: Wei; nonce: string; serviceId: number }, signer: AnySigner,
   ): Promise<{ txHash: string }> {
     const wallet = this.walletFor(signer);
-    const hash = await wallet.writeContract({
-      address: this.router(), abi: PAYMENT_ROUTER_ABI, functionName: 'pay',
-      chain: this.chain, account: wallet.account,
+    // Before moving value: prove the chain and the router are what we think.
+    // A CALL with value to a codeless address succeeds and burns the funds.
+    await this.assertChainIdentity();
+    const router = this.router();
+    const hash = await this.sendTx(wallet.account.address, (nonce) => wallet.writeContract({
+      address: router, abi: PAYMENT_ROUTER_ABI, functionName: 'pay',
+      chain: this.chain, account: wallet.account, nonce,
       value: BigInt(input.amountWei),
       args: [
         requireServiceId(input.serviceId), BigInt(input.nonce),
         normalizeAddress(input.to) as `0x${string}`,
       ],
-    });
-    await this.settled(hash, 'transfer');
+    }));
+    const receipt = await this.settled(hash, 'transfer');
+    // `status: 'success'` is NOT proof the payment happened — it is also what a
+    // call to an address with no code returns. The settlement only exists if
+    // OUR router emitted Paid, which is the exact log verifyTransfer will later
+    // look for. registerService already asserts its own event this way; the
+    // money path is the one that most needed it.
+    const paid = parseEventLogs({
+      abi: PAYMENT_ROUTER_ABI, eventName: 'Paid', logs: receipt.logs,
+    }).filter((e) => e.address.toLowerCase() === router.toLowerCase());
+    if (paid.length === 0) {
+      throw new AgentGateError(
+        'PAYMENT_NOT_SETTLED',
+        `transaction ${hash} mined successfully but emitted no Paid event from the router at ` +
+          `${router}. The value has left the payer account and no invoice was settled — ` +
+          'check that PAYMENT_ROUTER_ADDRESS is the router this chain actually hosts.',
+        502,
+      );
+    }
     return { txHash: hash };
+  }
+
+  /**
+   * EIP-191 sign `message` as `signer`, so the buyer can prove the X-PAYMENT
+   * proof is theirs. Goes through walletFor(), which is where every guard about
+   * the key never escaping already lives — a mock signer cannot sign here.
+   */
+  async signMessage(message: Uint8Array, signer: AnySigner): Promise<string> {
+    const wallet = this.walletFor(signer);
+    return wallet.account.signMessage({ message: { raw: message } });
   }
 
   /**

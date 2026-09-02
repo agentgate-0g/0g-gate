@@ -620,3 +620,53 @@ describe('listRecentActivity', () => {
   }, 30_000);
 
 });
+/**
+ * The mainnet-cutover failure mode. Nothing used to verify that the RPC on the
+ * other end was the chain the process thought it was, or that the configured
+ * contract addresses held any code there — and the contract addresses default
+ * to the Galileo TESTNET deployment. An operator who repoints ZG_RPC_URL at
+ * mainnet and forgets the rest got a client that was confidently wrong, and a
+ * value-bearing CALL to a codeless address SUCCEEDS on-chain, so the buyer's OG
+ * would be burned with a `status: success` receipt to show for it.
+ */
+describe('chain identity is asserted before trusting the chain', () => {
+  it('refuses to act when the RPC reports a different chain id than configured', async () => {
+    // Anvil really is 31337; claim 16661 (0G mainnet) and the mismatch must fire.
+    const wrong = new Live0gClient({
+      ...configFor(registryAddress, routerAddress), zgChainId: 16661,
+    } as AgentGateConfig);
+    await expect(wrong.ping()).rejects.toMatchObject({ code: 'CHAIN_ID_MISMATCH' });
+    // And it must gate the MONEY path, not just the readiness probe.
+    await expect(
+      wrong.transfer(
+        { to: seller.address, amountWei: '1000000000000000', nonce: '99', serviceId: 1 },
+        buyerSigner,
+      ),
+    ).rejects.toMatchObject({ code: 'CHAIN_ID_MISMATCH' });
+  });
+
+  it('refuses a contract address that holds no code on this chain', async () => {
+    // A funded EOA: a well-formed address that passes isAddress() and has no code —
+    // exactly the shape a leftover testnet address has on mainnet.
+    const codeless = new Live0gClient(
+      configFor(registryAddress, buyer.address) as AgentGateConfig,
+    );
+    await expect(
+      codeless.transfer(
+        { to: seller.address, amountWei: '1000000000000000', nonce: '98', serviceId: 1 },
+        buyerSigner,
+      ),
+    ).rejects.toMatchObject({ code: 'CONTRACT_NOT_DEPLOYED' });
+  });
+
+  it('the correctly-configured client still pays, and the guard is not cached as failed', async () => {
+    // A transient failure must not brick a healthy client: the good client
+    // shares the process with the two failing ones above.
+    await expect(client.ping()).resolves.toBeUndefined();
+    const { txHash } = await client.transfer(
+      { to: seller.address, amountWei: '1000000000000000', nonce: '97', serviceId: 1 },
+      buyerSigner,
+    );
+    expect(txHash).toMatch(/^0x[0-9a-f]{64}$/);
+  }, 30_000);
+});

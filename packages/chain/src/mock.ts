@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { AgentGateError, stripTrailingSlashes } from '@agentgate/shared';
+import { AgentGateError, MOCK_PAYMENT_ROUTER_ADDRESS, stripTrailingSlashes } from '@agentgate/shared';
 import type {
   ActivityEvent,
   AnySigner,
@@ -79,6 +79,13 @@ function assertServiceId(id: number): void {
  */
 export class MockChainHttpClient implements ChainClient {
   readonly network = 'mock';
+  /**
+   * Mock mode has no PaymentRouter — the devnet settles transfers itself. This
+   * is the placeholder the mock gateway advertises in `extra.router`, reported
+   * here so the buyer's invoice/router cross-check compares equal instead of
+   * refusing every offline-demo invoice.
+   */
+  readonly routerAddress = MOCK_PAYMENT_ROUTER_ADDRESS;
   private readonly baseUrl: string;
 
   constructor(devnetUrl: string) {
