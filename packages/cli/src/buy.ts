@@ -2,6 +2,7 @@ import { createAgentGateClient, type PayAndFetchResult } from '@agentgate/client
 import {
   AgentGateError,
   compareWei,
+  formatOg,
   ogToWei,
   stripTrailingSlashes,
   type AnySigner,
@@ -27,6 +28,13 @@ export interface BuyServiceOpts {
   settleDelayMs?: number;
   fetchImpl?: typeof fetch;
   requestTimeoutMs?: number;
+  /**
+   * Environment the operator spend ceiling is read from. Defaults to
+   * `process.env`; injectable for tests only — no command or tool surface
+   * forwards a caller-supplied env here, which is the whole point of the
+   * ceiling (see {@link operatorSpendLimit}).
+   */
+  env?: Record<string, string | undefined>;
 }
 
 export interface BuyServiceResult {
@@ -34,6 +42,51 @@ export interface BuyServiceResult {
   /** The exact URL the paid request was sent to. */
   url: string;
   result: PayAndFetchResult;
+}
+
+/**
+ * Per-call ceiling used when the operator configured none. Deliberately small:
+ * on mainnet an unset ceiling would otherwise mean "whatever the seller listed".
+ */
+const DEFAULT_MAX_SPEND_OG = '5';
+
+/**
+ * The operator's per-call spend ceiling, read from the ENVIRONMENT and never
+ * from a caller argument.
+ *
+ * `maxOg` is optional, and on the MCP surface it is chosen by the model driving
+ * `agentgate_buy` — a hijacked or prompt-injected agent simply omits it, which
+ * leaves `service.priceWei` as the only cap: a number the SELLER set, since
+ * registration is permissionless with a price floor and no ceiling. This is the
+ * one limit neither the model nor the seller can raise. `AGENTGATE_MAX_SPEND_OG`
+ * is the explicit knob; `BUYER_BUDGET_OG` (already validated by loadConfig, and
+ * already the buyer-agent's budget) is honoured so an operator who set it does
+ * not have to learn a second name.
+ */
+function operatorSpendLimit(env: Record<string, string | undefined>): {
+  wei: Wei;
+  og: string;
+  source: string;
+} {
+  const explicit = env.AGENTGATE_MAX_SPEND_OG?.trim();
+  const budget = env.BUYER_BUDGET_OG?.trim();
+  const [og, source] =
+    explicit !== undefined && explicit !== ''
+      ? [explicit, 'AGENTGATE_MAX_SPEND_OG']
+      : budget !== undefined && budget !== ''
+        ? [budget, 'BUYER_BUDGET_OG']
+        : [DEFAULT_MAX_SPEND_OG, 'the built-in default'];
+  try {
+    return { wei: ogToWei(og), og, source };
+  } catch {
+    // Fail closed. An unparseable ceiling that fell back to the default (or to
+    // "no ceiling") would hand a typo'd env var straight to an autonomous agent.
+    throw new AgentGateError(
+      'INVALID_CONFIG',
+      `${source} must be a non-negative OG decimal string (max 18 dp), got ${JSON.stringify(og)}`,
+      400,
+    );
+  }
 }
 
 /**
@@ -69,6 +122,10 @@ export async function buyService(opts: BuyServiceOpts): Promise<BuyServiceResult
   const maxPriceWei: Wei | undefined =
     opts.maxOg !== undefined ? ogToWei(opts.maxOg) : undefined;
 
+  // Resolved before the service lookup so a broken ceiling stops the call
+  // rather than being discovered only on the services that happen to be cheap.
+  const spendLimit = operatorSpendLimit(opts.env ?? process.env);
+
   const service = await chain.getService(id);
   if (service === null) {
     throw new AgentGateError('SERVICE_NOT_FOUND', `service ${id} not found`, 404);
@@ -78,6 +135,18 @@ export async function buyService(opts: BuyServiceOpts): Promise<BuyServiceResult
       'SERVICE_INACTIVE',
       `service ${id} (${service.name}) is paused by its owner — not paying`,
       403,
+    );
+  }
+  // The operator's ceiling, checked before any HTTP and before anything is
+  // signed, and checked independently of `maxOg` — so a caller (the model, on
+  // the MCP surface) can only LOWER the effective cap with its own --max, never
+  // raise it, and omitting --max entirely does not remove the ceiling.
+  if (compareWei(service.priceWei, spendLimit.wei) > 0) {
+    throw new AgentGateError(
+      'SPEND_LIMIT_EXCEEDED',
+      `service price ${formatOg(service.priceWei)} exceeds the operator spend ceiling ` +
+        `${spendLimit.og} OG (${spendLimit.source}) — raise it in the environment, not per call`,
+      402,
     );
   }
   // Fail fast before any HTTP when the on-chain price already exceeds the cap.

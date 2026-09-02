@@ -371,3 +371,113 @@ describe('buyService refuses an invoice that disagrees with the chain', () => {
     expect(chain.transfers[0]!.input.to).toBe(PAY_TO);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The ceiling belongs to the operator, not to the caller.
+//
+// `maxOg` is optional and, on the MCP surface, chosen by the model driving the
+// tool — a hijacked or prompt-injected agent simply omits it, leaving
+// `service.priceWei` as the only cap, i.e. a number the SELLER picked
+// (registration is permissionless, with a price floor and no ceiling). The env
+// ceiling is the one number neither the model nor the seller can raise.
+// ---------------------------------------------------------------------------
+
+describe('buyService enforces an operator spend ceiling from the environment', () => {
+  it('refuses a price above the ceiling before any HTTP or signing', async () => {
+    const chain = makeFakeChain(makeService(1)); // 0.5 OG
+    const { impl, calls } = gatewayFetch(() => Response.json({}));
+
+    await expect(
+      buyService({ ...baseOpts(chain, impl), env: { AGENTGATE_MAX_SPEND_OG: '0.1' } }),
+    ).rejects.toMatchObject({ code: 'SPEND_LIMIT_EXCEEDED' });
+
+    expect(calls).toHaveLength(0);
+    expect(chain.transfers).toHaveLength(0);
+  });
+
+  it('names the limit and its source in the error', async () => {
+    const chain = makeFakeChain(makeService(1));
+    const { impl } = gatewayFetch(() => Response.json({}));
+
+    await expect(
+      buyService({ ...baseOpts(chain, impl), env: { AGENTGATE_MAX_SPEND_OG: '0.1' } }),
+    ).rejects.toThrow(/0\.1 OG.*AGENTGATE_MAX_SPEND_OG/);
+  });
+
+  it('a caller-supplied maxOg cannot RAISE the ceiling', async () => {
+    const chain = makeFakeChain(makeService(1)); // 0.5 OG
+    const { impl, calls } = gatewayFetch(() => Response.json({}));
+
+    await expect(
+      buyService({
+        ...baseOpts(chain, impl),
+        maxOg: '999', // the model asking for more than the operator allowed
+        env: { AGENTGATE_MAX_SPEND_OG: '0.1' },
+      }),
+    ).rejects.toMatchObject({ code: 'SPEND_LIMIT_EXCEEDED' });
+
+    expect(calls).toHaveLength(0);
+    expect(chain.transfers).toHaveLength(0);
+  });
+
+  it('a caller-supplied maxOg may still LOWER the effective cap', async () => {
+    const chain = makeFakeChain(makeService(1)); // 0.5 OG
+    const { impl, calls } = gatewayFetch(() => Response.json({}));
+
+    await expect(
+      buyService({ ...baseOpts(chain, impl), maxOg: '0.4', env: { AGENTGATE_MAX_SPEND_OG: '5' } }),
+    ).rejects.toMatchObject({ code: 'PRICE_EXCEEDED' });
+
+    expect(calls).toHaveLength(0);
+    expect(chain.transfers).toHaveLength(0);
+  });
+
+  it('falls back to BUYER_BUDGET_OG when AGENTGATE_MAX_SPEND_OG is unset', async () => {
+    const chain = makeFakeChain(makeService(1)); // 0.5 OG
+    const { impl, calls } = gatewayFetch(() => Response.json({}));
+
+    await expect(
+      buyService({ ...baseOpts(chain, impl), env: { BUYER_BUDGET_OG: '0.25' } }),
+    ).rejects.toMatchObject({ code: 'SPEND_LIMIT_EXCEEDED' });
+
+    expect(calls).toHaveLength(0);
+    expect(chain.transfers).toHaveLength(0);
+  });
+
+  it('applies a built-in ceiling when the operator configured none', async () => {
+    const chain = makeFakeChain(makeService(1, { priceWei: '900000000000000000000' })); // 900 OG
+    const { impl, calls } = gatewayFetch(() => Response.json({}));
+
+    await expect(buyService({ ...baseOpts(chain, impl), env: {} })).rejects.toMatchObject({
+      code: 'SPEND_LIMIT_EXCEEDED',
+    });
+
+    expect(calls).toHaveLength(0);
+    expect(chain.transfers).toHaveLength(0);
+  });
+
+  it('fails closed on an unparseable ceiling rather than treating it as unlimited', async () => {
+    const chain = makeFakeChain(makeService(1));
+    const { impl, calls } = gatewayFetch(() => Response.json({}));
+
+    await expect(
+      buyService({ ...baseOpts(chain, impl), env: { AGENTGATE_MAX_SPEND_OG: 'lots' } }),
+    ).rejects.toMatchObject({ code: 'INVALID_CONFIG' });
+
+    expect(calls).toHaveLength(0);
+    expect(chain.transfers).toHaveLength(0);
+  });
+
+  it('still pays when the price is within the ceiling', async () => {
+    const chain = makeFakeChain(makeService(1)); // 0.5 OG
+    const { impl } = gatewayFetch(() => Response.json({ rate: 16250 }));
+
+    const { result } = await buyService({
+      ...baseOpts(chain, impl),
+      env: { AGENTGATE_MAX_SPEND_OG: '0.5' },
+    });
+
+    expect(result.paid).toBe(true);
+    expect(chain.transfers).toHaveLength(1);
+  });
+});
