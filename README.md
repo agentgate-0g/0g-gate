@@ -45,7 +45,7 @@ AI agents can't pay for the APIs they use — no cards, no logins, no accounts. 
 - **Invoice-bound payments** — the buyer pays through a `PaymentRouter` contract that binds the invoice nonce to the payment **on-chain** and rejects a replay, so verification is one exact-match log lookup instead of a heuristic transfer search.
 - **On-chain price list** — each service stores an `accepts[]` price list *in the contract*, with a per-entry `asset` address and EIP-712 domain fields. The shipped rail is **native OG only** (`PaymentRouter.pay()` settles `msg.value`); the multi-asset shape is already on-chain, so an authorization-settled ERC-20 rail is a client change, not a contract change.
 - **Native MCP tools** — one line of config and any MCP-capable agent (Claude Desktop, custom clients) gets discover / inspect / pay as native tools.
-- **Payment-backed reputation** — every arms-length served call is attested on-chain, so trust scores are receipts of real value transfer, not marketing. A call paid by the service's own owner or payout account is served but never scored, so nobody can wash-trade their own reputation.
+- **Payment-backed reputation** — every arms-length served call is attested on-chain, so trust scores are receipts of real value transfer, not marketing. Every point has to map to a settlement that paid *this* service *its* listed price at *its* registered payout address, and a call paid by the service's own owner, payout account or attestor is served but never scored. Read that as what it is: it makes a score impossible to mint without a real payment, and it closes the free self-pay loop. It does **not** stop a seller who cycles its own funds through a fresh address — that pays the money to itself and costs only gas. Staking-weighted attestations with slashing (roadmap) are what would put a real price on it.
 - **Zero-config reads, no API key at all** — `list` and `status` are plain public-RPC reads: view calls, plus one bounded `eth_getLogs` for attestation history. There is no indexer and no key to provision, anywhere in the read path.
 
 ---
@@ -323,7 +323,7 @@ None of the three is upgradable — there is no proxy, so a redeploy is a **new 
 - Indexer-free chain client — viem view calls + `eth_getLogs`, no API key in the read path
 - MCP server for any agent framework — `npx agentgate-0g mcp`
 - Importable SDK — the same package is a library: `import { wrapService, buyService, listServices } from 'agentgate-0g'`
-- CLI **v1.0.4** — defaults point at the audited contract set
+- CLI **v1.0.4** — defaults point at the current contract set (self-reviewed in-repo; **no external audit has been performed**)
 
 **Next**
 

@@ -1,8 +1,13 @@
 # systemd --user unit: keeps the AgentGate live gateway (402 paywall middleware)
-# running + auto-restarting on :4021. Install:
+# running + auto-restarting. The port is whatever `MIDDLEWARE_PORT` says in the
+# repo's root .env (4021 in .env.example; this box runs 16021) — this unit does
+# not pin one. Install from the repo root:
 #
 #   mkdir -p ~/.config/systemd/user
-#   cp deploy/agentgate-gateway.service ~/.config/systemd/user/
+#   # Substitute the repo path on the way in — @REPO@ is a placeholder on
+#   # purpose, see the WorkingDirectory note below.
+#   sed "s|@REPO@|$(git rev-parse --show-toplevel)|" deploy/agentgate-gateway.service \
+#     > ~/.config/systemd/user/agentgate-gateway.service
 #   loginctl enable-linger "$USER"          # survive logout / start on boot
 #   systemctl --user daemon-reload
 #   systemctl --user enable --now agentgate-gateway
@@ -17,7 +22,17 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/mdlog/Project-MDlabs/Dorahacks/casper
+# Substituted at install time, never hardcoded here. A unit file is COPIED out
+# of the repo into ~/.config/systemd/user/, so unlike
+# deploy/agentgate.ecosystem.config.cjs — which resolves the repo from its own
+# __dirname for exactly this reason — it cannot work out where it came from at
+# runtime; the sed above is the equivalent step, done once by the installer.
+# The literal that used to sit here pointed at the retired Casper-era checkout,
+# which still exists on this box, so `systemctl --user start agentgate-gateway`
+# booted a DIFFERENT application on this gateway's port and looked healthy
+# doing it. Leaving @REPO@ unsubstituted fails the start loudly (systemd cannot
+# chdir into it) instead of quietly serving the wrong thing.
+WorkingDirectory=@REPO@
 # Login shell so PATH picks up node/npm/tsx from the user's profile.
 ExecStart=/bin/bash -lc 'exec npm run dev:live'
 Restart=on-failure

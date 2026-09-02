@@ -11,11 +11,24 @@
 >
 > 1. **The faucet caps you at 0.1 OG per wallet per day.** Deploying all three contracts costs
 >    roughly **0.015 OG** at 0G's ~4 gwei priority fee — several times over inside one grant, so
->    there is no need to split the deploy across two days. You do need **two** funded wallets
->    though: the anti-wash-trading guard skips the attestation when the payer is the service's
->    own owner or payout address, so a demo where buyer and seller share a wallet records a
->    payment but leaves the score at 0/0. Deployer, seller and gate may share one wallet; the
->    **buyer must be a different one**.
+>    there is no need to split the deploy across two days. Budget for **three** funded wallets
+>    though, one per role, because the contract will not let you collapse them:
+>    `registerService` reverts `InvalidAttestor` when the attestor equals `msg.sender` (the
+>    seller doing the registering) or equals `paymentTarget`, and `setAttestor` refuses the same
+>    pairings on rotation. So "seller and gate share one wallet" is not a shortcut you get away
+>    with on a demo — it is refused on-chain.
+>
+>    Keep them apart for the same reason the contract does, and note what that means for
+>    custody: `GATE_SIGNER_KEY` is the attestor, and it lives in the environment of an
+>    **internet-facing** gateway process, so it is the key most likely to be stolen — fund it
+>    thin, it only ever pays attestation gas. `SELLER_SIGNER_KEY` owns the service and its
+>    `paymentTarget` **receives every payment**, so it is the revenue key: keep it in operator
+>    custody (offline or a hardware signer), and never copy it onto the gateway host. The
+>    deployer is not an on-chain role at all — that key can be any of them, or a fourth.
+>
+>    The buyer must be a distinct address too: the anti-wash-trading guard skips the attestation
+>    when the payer is the service's own owner, payout address or attestor, so a demo where
+>    buyer and seller share a wallet records a payment but leaves the score at 0/0.
 > 2. **Contract timestamps are milliseconds, not seconds.** EVM `block.timestamp` is in
 >    seconds; every contract here stores and emits `uint64(block.timestamp) * 1000` because
 >    every off-chain reader is contracted on ms. If you fork or re-derive a contract, keep it.
@@ -86,6 +99,47 @@ forge script script/Deploy.s.sol:Deploy --rpc-url "$ZG_RPC_URL" \
   --broadcast
 ```
 
+### Deploying to mainnet — name the chain, and verify
+
+For a deploy that costs real money, use `runOnChain(uint256)` and the **named**
+`mainnet` rpc_endpoint from `foundry.toml`, not `$ZG_RPC_URL`:
+
+```bash
+cd contracts-evm
+ZG_EXPLORER_API_KEY=<key> forge script script/Deploy.s.sol:Deploy \
+  --sig "runOnChain(uint256)" 16661 \
+  --rpc-url mainnet --private-key "$DEPLOYER_KEY" \
+  --priority-gas-price 4000000000 --with-gas-price 6000000000 \
+  --broadcast --verify --verifier etherscan
+```
+
+Two things that are easy to skip and expensive to skip:
+
+- **`--sig "runOnChain(uint256)" 16661`** makes the script revert unless the
+  connected chain really is mainnet. The `galileo` rpc_endpoint is literally
+  `"${ZG_RPC_URL}"`, so `--rpc-url galileo` deploys wherever that variable
+  happens to point — an operator with mainnet exported deploys to mainnet while
+  every word on screen says testnet. These contracts are immutable and permanent.
+- **`--verify`** is not optional for a contract that holds money. Three addresses
+  whose source nobody can read is not a shippable state. Note the verifier base
+  is `/open/api`, **not** `/api` — `/api` serves the explorer's single-page app,
+  so a deploy "verified" against it was never verified at all. `foundry.toml`
+  now carries the corrected URL for both networks.
+
+If verification is skipped or fails, each contract can be verified afterwards
+against the same profile:
+
+```bash
+forge verify-contract --chain 16661 <addr> src/PaymentRouter.sol:PaymentRouter
+forge verify-contract --chain 16661 <addr> src/AgentGateRegistry.sol:AgentGateRegistry \
+  --constructor-args $(cast abi-encode "constructor(address)" <router>)
+forge verify-contract --chain 16661 <addr> src/SpendGuard.sol:SpendGuard \
+  --constructor-args $(cast abi-encode "constructor(address)" <registry>)
+```
+
+Then confirm on the explorer that all three show verified source before
+announcing the addresses anywhere.
+
 > **0G rejects Foundry's auto-estimated fee — pass the tip explicitly.** 0G's base
 > fee is ~7 **wei**, so `forge script` derives a priority fee of 1 wei and the node
 > refuses the transaction:
@@ -134,11 +188,20 @@ SPEND_GUARD_ADDRESS=<from step 4>
 ACTIVITY_LOOKBACK_BLOCKS=50000
 GATE_SIGNER_KEY=0x…  BUYER_SIGNER_KEY=0x…  SELLER_SIGNER_KEY=0x…
 AGENTGATE_ADMIN_TOKEN=<strong unique token>   # loadConfig() refuses the default in live mode
+INVOICE_STORE_PATH=<abs path>/data/gateway-invoices.json   # live mode refuses to boot without it
 ```
+
+One `.env` holding all three keys is the **developer** configuration: this box drives every
+role of the demo loop itself. A real deployment splits them by custody — only `GATE_SIGNER_KEY`
+belongs on the gateway host (see [DEPLOY-GATEWAY.md](DEPLOY-GATEWAY.md#notes--security)), the
+seller/payout key signs from the operator's own machine, and the buyer key belongs to whoever
+is buying.
 
 `loadConfig()` hard-fails on a malformed key or registry address, and on live mode with the
 default admin token. A malformed key is reported **by variable name only** — the value never
-reaches a log line or an error message.
+reaches a log line or an error message. `createApp()` adds one more live-mode refusal:
+`INVOICE_STORE_PATH` must be set, because an in-memory invoice store loses every in-flight
+payment on restart and `PaymentRouter` has no refund path.
 
 ## 6. `CONTRACT_NOT_DEPLOYED` call paths (all gated, checked before any IO)
 
