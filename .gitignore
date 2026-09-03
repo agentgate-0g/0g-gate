@@ -14,6 +14,12 @@ coverage/
 *.pem
 *_secret_key.pem
 keys/
+# Vercel CLI link state. `vercel` writes projectId/orgId here on first run, and
+# it also drops a generated vercel.json at the repo root describing whatever
+# "services" it auto-detected in the monorepo — which is how a dashboard deploy
+# ended up trying to build packages/middleware. Neither belongs in the repo.
+.vercel
+
 # Registry credentials — an .npmrc carries a plaintext _authToken.
 # Two npm accounts are in play on this machine, so a per-project .npmrc
 # is a reasonable thing to create; it must never be committed.
