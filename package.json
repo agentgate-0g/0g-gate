@@ -12,7 +12,6 @@
     "dashboard"
   ],
   "scripts": {
-    "preinstall": "node scripts/vercel-diagnose.mjs",
     "dev": "tsx scripts/dev.ts",
     "dev:seed": "tsx scripts/dev.ts --seed",
     "dev:live": "tsx scripts/live.ts",
