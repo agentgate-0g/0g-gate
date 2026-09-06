@@ -68,7 +68,7 @@ export const DEFAULT_ZG_EXPLORER_URL = 'https://chainscan-galileo.0g.ai';
  * rolled back, while `/svc/<id>` 404s. `gateway.mdloglabs.org` is the older
  * Casper deployment and is deliberately NOT this value.
  */
-export const DEFAULT_GATEWAY_URL = 'https://0g-gateway.mdloglabs.org';
+export const DEFAULT_GATEWAY_URL = 'https://0g-gateway.equiflow.xyz';
 
 /**
  * Default hosted dashboard the CLI links to in live mode when printing the

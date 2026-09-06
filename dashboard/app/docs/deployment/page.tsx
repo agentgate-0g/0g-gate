@@ -284,7 +284,7 @@ export default function DeploymentPage() {
 
       <H2 id="pm2-tunnel">Bare metal: PM2, systemd, and a Cloudflare tunnel</H2>
       <P>
-        This is how the production gateway at <M>0g-gateway.mdloglabs.org</M> actually runs — no
+        This is how the production gateway at <M>0g-gateway.equiflow.xyz</M> actually runs — no
         Docker. Keep the gateway alive with the shipped PM2 config (it defines both{' '}
         <M>agentgate-gateway</M> on <M>:4021</M> and <M>agentgate-dashboard</M> on <M>:3000</M>, and
         sets <M>INVOICE_STORE_PATH</M> so issued invoices survive restarts), then expose it through
@@ -547,7 +547,7 @@ export default function DeploymentPage() {
 
       <Callout tone="warn" title="point the CLI at your gateway">
         In live mode the CLI&apos;s <M>wrap</M> defaults <M>--gateway</M> to the hosted{' '}
-        <M>https://0g-gateway.mdloglabs.org</M>. When self-hosting, pass{' '}
+        <M>https://0g-gateway.equiflow.xyz</M>. When self-hosting, pass{' '}
         <M>--gateway https://your-gateway.example.com</M> (or your tunnel URL) so the seller&apos;s
         upstream mapping lands on your instance — otherwise your <M>/svc/&lt;id&gt;</M> responds
         404. See <DocLink href="/docs/cli">the CLI reference</DocLink>.

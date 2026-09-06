@@ -25,11 +25,11 @@ they serve the same build from the same registry.
 ## 1. Machine state — check before every take
 
 This machine runs the **live production gateway on port 4021** (cloudflared tunnels
-`0g-gateway.mdloglabs.org` → `localhost:4021`).
+`0g-gateway.equiflow.xyz` → `localhost:4021`).
 
 ```bash
 # Confirm the live gateway is up — this is what judges hit
-curl -sS https://0g-gateway.mdloglabs.org/healthz
+curl -sS https://0g-gateway.equiflow.xyz/healthz
 # expect: {"ok":true,"network":"0g-galileo","attestor":"0x71a89a7e...87bae"}
 ```
 
@@ -165,7 +165,7 @@ Say "mock chain" out loud if you use it — do not let it read as on-chain.
 | Shot | Command | Cold | Warm | Risk |
 |---|---|---|---|---|
 | Catalog, zero setup | `npx agentgate-0g@latest list` | ~30 s | **3.1 s** | pre-warm npx (§2) |
-| Live 402 | `curl -i https://0g-gateway.mdloglabs.org/svc/1` | — | **<1 s** | none |
+| Live 402 | `curl -i https://0g-gateway.equiflow.xyz/svc/1` | — | **<1 s** | none |
 | Gateway health | `curl .../healthz` | — | **<1 s** | none |
 | Offline full loop | `npm run demo` | — | **0.67 s** | ports (§1) |
 | Dashboard first paint | `npm start -w dashboard` | 13 s build | **1.6 s** | port + prod build (§3) |

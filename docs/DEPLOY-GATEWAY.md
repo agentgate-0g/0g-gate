@@ -1,7 +1,7 @@
 # Hosting the live AgentGate gateway
 
 The CLI's live `wrap` defaults `--gateway` to `DEFAULT_GATEWAY_URL`
-(`https://0g-gateway.mdloglabs.org`, in `packages/shared/src/config.ts`). For the
+(`https://0g-gateway.equiflow.xyz`, in `packages/shared/src/config.ts`). For the
 one-line `npx agentgate-0g wrap …` to complete its upstream
 mapping, a **live-mode middleware** must be reachable at that URL. Reads
 (`list`/`status`) never touch the gateway, so they work regardless.
@@ -43,7 +43,7 @@ docker run -d --name agentgate-gateway -p 4021:4021 \
 ```
 
 Then put a TLS-terminating reverse proxy / tunnel in front and point the DNS for
-`0g-gateway.mdloglabs.org` at it. Health check: `GET /healthz` → `{ ok, network }`;
+`0g-gateway.equiflow.xyz` at it. Health check: `GET /healthz` → `{ ok, network }`;
 readiness (chain reachable): `GET /readyz`.
 
 ## Verify
@@ -53,7 +53,7 @@ readiness (chain reachable): `GET /readyz`.
 export SELLER_SIGNER_KEY=0x…
 npx agentgate-0g wrap https://api.example.com/gold --price 2.5 --name "My API"
 # → prints service id + public endpoint; the gateway logs `self_mapped`.
-curl https://0g-gateway.mdloglabs.org/svc/<id>        # → 402 payment challenge
+curl https://0g-gateway.equiflow.xyz/svc/<id>        # → 402 payment challenge
 ```
 
 If the gateway is unreachable when you `wrap`, the on-chain registration still
@@ -152,7 +152,7 @@ systemctl --user enable --now agentgate-gateway
 **2. Set `TRUST_PROXY=1` in `.env`** (behind exactly one Cloudflare hop) so the
 rate limiter keys off the real client IP, then restart the unit.
 
-**3. Expose `0g-gateway.mdloglabs.org` → `http://localhost:<MIDDLEWARE_PORT>`**
+**3. Expose `0g-gateway.equiflow.xyz` → `http://localhost:<MIDDLEWARE_PORT>`**
 (`16021` on this box, per the `.env` above — not `4021`; a tunnel pointed at
 `4021` here lands on nothing, or worse on whatever else claimed that port) —
 pick one:
@@ -170,12 +170,12 @@ pick one:
 
   ```bash
   cloudflared tunnel create agentgate-gateway
-  cloudflared tunnel route dns agentgate-gateway 0g-gateway.mdloglabs.org
+  cloudflared tunnel route dns agentgate-gateway 0g-gateway.equiflow.xyz
   # ~/.cloudflared/agentgate-gateway.yml:
   #   tunnel: <UUID printed by create>
   #   credentials-file: /home/mdlog/.cloudflared/<UUID>.json
   #   ingress:
-  #     - hostname: 0g-gateway.mdloglabs.org
+  #     - hostname: 0g-gateway.equiflow.xyz
   #       service: http://localhost:16021        # = MIDDLEWARE_PORT in the root .env
   #     - service: http_status:404
   cloudflared tunnel --config ~/.cloudflared/agentgate-gateway.yml run agentgate-gateway
@@ -184,11 +184,11 @@ pick one:
 **4. Verify publicly:**
 
 ```bash
-curl -s https://0g-gateway.mdloglabs.org/healthz     # {"ok":true,"network":"0g-galileo"}
+curl -s https://0g-gateway.equiflow.xyz/healthz     # {"ok":true,"network":"0g-galileo"}
 # from any box with a funded wallet key:
 export SELLER_SIGNER_KEY=0x…
 npx agentgate-0g wrap https://open.er-api.com/v6/latest/USD --price 0.001 --name "USD FX"
-curl -i https://0g-gateway.mdloglabs.org/svc/<id>     # 402 challenge
+curl -i https://0g-gateway.equiflow.xyz/svc/<id>     # 402 challenge
 ```
 
 Note: a public gateway spends the gate key's OG on an on-chain attestation per

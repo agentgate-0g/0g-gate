@@ -198,7 +198,7 @@ export default function Page() {
         addresses unset the gateway answers <M>CONTRACT_NOT_DEPLOYED</M> (503). See{' '}
         <DocLink href="/docs/contract">Smart contracts</DocLink>. These prerequisites apply only
         when you run the gateway/stack yourself — the public gateway is already hosted at{' '}
-        <M>https://0g-gateway.mdloglabs.org</M>, and the published CLI defaults the registry hash and
+        <M>https://0g-gateway.equiflow.xyz</M>, and the published CLI defaults the registry hash and
         reads 0G Galileo Testnet with no keys.
       </Callout>
 

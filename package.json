@@ -19,7 +19,7 @@
     "demo": "tsx scripts/demo.ts",
     "typecheck": "npm run typecheck --workspaces --if-present && tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "build": "npm run build -w dashboard",
+    "build": "npm run build --workspaces --if-present",
     "agent": "tsx packages/buyer-agent/src/main.ts",
     "agentgate": "tsx packages/cli/src/bin.ts",
     "smoke:live": "tsx scripts/smoke-live-read.ts",

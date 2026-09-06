@@ -11,7 +11,7 @@
 [![license](https://img.shields.io/npm/l/agentgate-0g.svg)](LICENSE)
 [![0G Galileo Testnet](https://img.shields.io/badge/0G-Galileo%20Testnet-6d28d9.svg)](https://chainscan-galileo.0g.ai)
 
-**[Dashboard](https://agentgate-0g.mdloglabs.org)** · **[Gateway](https://0g-gateway.mdloglabs.org)** · **[npm](https://www.npmjs.com/package/agentgate-0g)** · **[Docs](https://agentgate-0g.mdloglabs.org/docs)** · **[Explorer](https://chainscan-galileo.0g.ai)** · **[Faucet](https://faucet.0g.ai)**
+**[Dashboard](https://agentgate-0g.mdloglabs.org)** · **[Gateway](https://0g-gateway.equiflow.xyz)** · **[npm](https://www.npmjs.com/package/agentgate-0g)** · **[Docs](https://agentgate-0g.mdloglabs.org/docs)** · **[Explorer](https://chainscan-galileo.0g.ai)** · **[Faucet](https://faucet.0g.ai)**
 
 [![AgentGate dashboard — live catalog of on-chain registered services](docs/assets/dashboard.png)](https://agentgate-0g.mdloglabs.org)
 
@@ -65,7 +65,7 @@ Against the live 0G deployment ([addresses](#deployed-addresses)):
 
 ```bash
 npx agentgate-0g@latest list                # the on-chain service catalog, zero setup
-curl -sS https://0g-gateway.mdloglabs.org/svc/3    # a real HTTP 402 invoice from the live gateway
+curl -sS https://0g-gateway.equiflow.xyz/svc/3    # a real HTTP 402 invoice from the live gateway
 ```
 
 <details>
@@ -294,7 +294,7 @@ None of the three is upgradable — there is no proxy, so a redeploy is a **new 
 
 ## Deployment and hosting
 
-**Currently hosted:** the 0G gateway runs at **https://0g-gateway.mdloglabs.org** and the dashboard at **https://agentgate-0g.mdloglabs.org** (cloudflared tunnels → local services). The CLI is published to npm as [`agentgate-0g`](https://www.npmjs.com/package/agentgate-0g) and defaults to that gateway.
+**Currently hosted:** the 0G gateway runs at **https://0g-gateway.equiflow.xyz** and the dashboard at **https://agentgate-0g.mdloglabs.org** (cloudflared tunnels → local services). The CLI is published to npm as [`agentgate-0g`](https://www.npmjs.com/package/agentgate-0g) and defaults to that gateway.
 
 > `gateway.mdloglabs.org` (no `0g-` prefix) is the **older Casper deployment**, kept running separately. It is a different chain with a different registry, so pointing `--gateway` at it registers a service on 0G that the gateway cannot map — the on-chain registration is real and is not rolled back, while `/svc/<id>` 404s.
 

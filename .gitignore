@@ -38,3 +38,6 @@ docs/video/*.mp4
 docs/video/*.png
 docs/video/vo/*.mp3
 docs/video/vo/*.wav
+
+# Throwaway buyer for scripts/smoke-live-buy.ts — pocket change, never a real wallet.
+.agentgate-smoke-buyer.key

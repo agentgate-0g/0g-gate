@@ -335,7 +335,7 @@ export default function Page() {
       </P>
       <CodeBlock
         label="1 — the 402 challenge"
-        code={'curl -sS https://0g-gateway.mdloglabs.org/svc/1'}
+        code={'curl -sS https://0g-gateway.equiflow.xyz/svc/1'}
       />
       <CodeBlock
         label="response (abbreviated) — keep payTo, extra.router and extra.nonce"
@@ -385,7 +385,7 @@ export default function Page() {
           "PROOF=$(printf '%s' '{\"x402Version\":1,\"scheme\":\"exact-settled\",\"network\":\"0g-galileo\",",
           '  \"payload\":{\"transaction\":\"0x<tx-hash>\",\"nonce\":\"<nonce>\"}}\' | base64 -w0)',
           '',
-          'curl -sS https://0g-gateway.mdloglabs.org/svc/1 -H "X-PAYMENT: $PROOF"',
+          'curl -sS https://0g-gateway.equiflow.xyz/svc/1 -H "X-PAYMENT: $PROOF"',
         ].join('\n')}
       />
       <P>

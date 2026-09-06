@@ -36,7 +36,7 @@ export default function Page() {
         right now. Ask it for service <M>#1</M> and a real 402 invoice comes back — a fresh{' '}
         <M>nonce</M>, the on-chain price, and the seller&apos;s payment account:
       </P>
-      <CodeBlock label="no install required" code={'curl -sS https://0g-gateway.mdloglabs.org/svc/1'} />
+      <CodeBlock label="no install required" code={'curl -sS https://0g-gateway.equiflow.xyz/svc/1'} />
       <CodeBlock
         label="response (abbreviated)"
         code={[

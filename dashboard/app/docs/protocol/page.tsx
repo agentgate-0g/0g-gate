@@ -191,7 +191,7 @@ export default function Page() {
           '      "maxAmountRequired": "1000000000000000",',
           '      "asset": "OG",',
           '      "payTo": "0x19ff...b5f0",',
-          '      "resource": "https://0g-gateway.mdloglabs.org/svc/1",',
+          '      "resource": "https://0g-gateway.equiflow.xyz/svc/1",',
           '      "description": "RWA FX & Gold Oracle",',
           '      "maxTimeoutSeconds": 600,',
           '      "extra": {',

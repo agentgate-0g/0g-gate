@@ -105,7 +105,7 @@ export default function Page() {
         <strong className="text-white">signing with that same seller key</strong>, so no admin
         token is needed; mock mode uses the shared dev admin token instead (<M>AGENTGATE_ADMIN_TOKEN</M>,
         same default on CLI and gateway). In live mode the gateway defaults to the hosted{' '}
-        <M>https://0g-gateway.mdloglabs.org</M>, so you don&apos;t need to run one yourself — pass{' '}
+        <M>https://0g-gateway.equiflow.xyz</M>, so you don&apos;t need to run one yourself — pass{' '}
         <M>--gateway</M> to target a self-hosted gateway instead (mock mode defaults to{' '}
         <M>http://localhost:4021</M>).
       </P>
@@ -205,11 +205,11 @@ export default function Page() {
             name: '--gateway <url>',
             type: 'url',
             required: false,
-            default: 'https://0g-gateway.mdloglabs.org (live) / http://localhost:4021 (mock)',
+            default: 'https://0g-gateway.equiflow.xyz (live) / http://localhost:4021 (mock)',
             desc: (
               <>
                 Gateway base URL, defaulting to the hosted{' '}
-                <M>https://0g-gateway.mdloglabs.org</M> in live mode and{' '}
+                <M>https://0g-gateway.equiflow.xyz</M> in live mode and{' '}
                 <M>http://localhost:&lt;MIDDLEWARE_PORT|4021&gt;</M> in mock mode. This — not the
                 upstream — is the{' '}
                 <M>endpointUrl</M> stored on-chain; the public endpoint becomes{' '}
@@ -255,7 +255,7 @@ export default function Page() {
       <CodeBlock
         code={[
           'service id:      5',
-          'public endpoint: https://0g-gateway.mdloglabs.org/svc/5',
+          'public endpoint: https://0g-gateway.equiflow.xyz/svc/5',
           'dashboard:       https://agentgate-0g.mdloglabs.org/services/5',
           'register tx:     <txHash>',
         ].join('\n')}
@@ -266,7 +266,7 @@ export default function Page() {
         An unpaid request to the public endpoint must answer <M>HTTP 402</M> with an x402
         challenge — that is the paywall working, not an error:
       </P>
-      <CommandBlock text="curl -i https://0g-gateway.mdloglabs.org/svc/5" />
+      <CommandBlock text="curl -i https://0g-gateway.equiflow.xyz/svc/5" />
       <CodeBlock
         label="expected (trimmed)"
         code={[
@@ -274,7 +274,7 @@ export default function Page() {
           '',
           '{"x402Version":1,"error":"X-PAYMENT header is required",',
           ' "accepts":[{"scheme":"exact-settled","network":"0g-galileo","maxAmountRequired":"2500000000000000000",',
-          '   "asset":"OG","payTo":"0x…","resource":"https://0g-gateway.mdloglabs.org/svc/1",',
+          '   "asset":"OG","payTo":"0x…","resource":"https://0g-gateway.equiflow.xyz/svc/1",',
           '   …,"extra":{"nonce":"…","serviceId":1,"router":"0x…",…}}]}',
         ].join('\n')}
       />

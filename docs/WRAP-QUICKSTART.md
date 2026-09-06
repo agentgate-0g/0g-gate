@@ -52,14 +52,14 @@ Yang terjadi:
 1. **Registrasi on-chain** — `registerService` ke registry yang sudah
    ter-deploy via RPC `https://evmrpc-testnet.0g.ai`.
 2. **Mapping upstream ke gateway** — POST bertanda tangan owner ke
-   `https://0g-gateway.mdloglabs.org/services/<id>/map`. URL upstream **tidak**
+   `https://0g-gateway.equiflow.xyz/services/<id>/map`. URL upstream **tidak**
    disimpan on-chain; hanya gateway yang mengetahuinya.
 
 Output sukses terlihat seperti:
 
 ```
 service id:      7
-public endpoint: https://0g-gateway.mdloglabs.org/svc/7
+public endpoint: https://0g-gateway.equiflow.xyz/svc/7
 dashboard:       https://agentgate-0g.mdloglabs.org/services/7
 register tx:     0xa1b2c3…
 explorer:        https://chainscan-galileo.0g.ai/tx/0xa1b2c3…
@@ -78,7 +78,7 @@ npx agentgate-0g list
 npx agentgate-0g status <id>
 
 # paywall hidup: harus menjawab HTTP 402 + invoice JSON
-curl -i https://0g-gateway.mdloglabs.org/svc/<id>
+curl -i https://0g-gateway.equiflow.xyz/svc/<id>
 ```
 
 ## Aturan & flag penting
@@ -88,7 +88,7 @@ curl -i https://0g-gateway.mdloglabs.org/svc/<id>
 | `--price` | OG desimal, minimal 0.000001 OG (1e12 wei), maksimal 18 angka di belakang koma |
 | `SELLER_SIGNER_KEY` / `--key` | private key `0x` + 64 hex, wajib untuk write di mode live. **Env var lebih aman** daripada flag |
 | `--description <d>` | deskripsi service (opsional) |
-| `--gateway <url>` | ganti gateway (default hosted: `https://0g-gateway.mdloglabs.org`) |
+| `--gateway <url>` | ganti gateway (default hosted: `https://0g-gateway.equiflow.xyz`) |
 | `--payment-target <0xaddress>` | tujuan pembayaran (default: address dari key) |
 | `--attestor <0xaddress>` | address yang boleh mencatat attestation (default: address dari key) |
 | `--rpc-url` / `--registry` / `--mode` | override RPC 0G, alamat registry, atau mode (default CLI terpublish: `live`) |

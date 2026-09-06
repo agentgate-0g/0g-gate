@@ -38,7 +38,7 @@ export default function Page() {
         upstream&apos;s status and <M>Content-Type</M> through unchanged on a paid call. Ports below
         are the repo defaults; override with environment variables documented in{' '}
         <DocLink href="/docs/configuration">Configuration</DocLink>. The public hosted gateway runs
-        at <M>https://0g-gateway.mdloglabs.org</M> (live mode, <M>0g-galileo</M>); the{' '}
+        at <M>https://0g-gateway.equiflow.xyz</M> (live mode, <M>0g-galileo</M>); the{' '}
         <M>localhost:4021</M> examples below target a self-hosted or local gateway.
       </P>
 

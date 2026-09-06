@@ -132,7 +132,7 @@ export default function Page() {
               <>
                 Feeds the default <M>--gateway</M> in <M>mock</M> mode
                 (<M>http://localhost:&lt;MIDDLEWARE_PORT&gt;</M>); <M>live</M> mode defaults{' '}
-                <M>--gateway</M> to the hosted <M>https://0g-gateway.mdloglabs.org</M>.
+                <M>--gateway</M> to the hosted <M>https://0g-gateway.equiflow.xyz</M>.
               </>
             ),
           },
@@ -253,7 +253,7 @@ export default function Page() {
           [
             <M key="g">--gateway {'<url>'}</M>,
             'no',
-            <M key="gd">https://0g-gateway.mdloglabs.org (live) · http://localhost:&lt;MIDDLEWARE_PORT&gt; (mock)</M>,
+            <M key="gd">https://0g-gateway.equiflow.xyz (live) · http://localhost:&lt;MIDDLEWARE_PORT&gt; (mock)</M>,
             'Gateway base URL (this base is what gets stored on-chain; readers compute <base>/svc/<id>). No query/fragment; https required for non-localhost hosts in live mode.',
           ],
           [
@@ -289,7 +289,7 @@ export default function Page() {
         label="output"
         code={[
           'service id:      5',
-          'public endpoint: https://0g-gateway.mdloglabs.org/svc/5',
+          'public endpoint: https://0g-gateway.equiflow.xyz/svc/5',
           'dashboard:       https://agentgate-0g.mdloglabs.org/services/5',
           'register tx:     0x<txHash>',
           'explorer:        https://chainscan-galileo.0g.ai/tx/0x<txHash>',
@@ -427,7 +427,7 @@ export default function Page() {
         label="stderr (payment metadata) — the response body arrives on stdout"
         code={[
           'service:  #5 RWA FX & Gold Oracle',
-          'url:      https://0g-gateway.mdloglabs.org/svc/5',
+          'url:      https://0g-gateway.equiflow.xyz/svc/5',
           'paid:     0.5 OG',
           'payment:  0x<txHash>',
           'explorer: https://chainscan-galileo.0g.ai/tx/0x<txHash>',

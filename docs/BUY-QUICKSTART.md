@@ -46,7 +46,7 @@ Ada **tiga cara** menjalankan alur ini dari PC lain:
    ```bash
    npx agentgate-0g list           # lihat id, harga, tier, ACTIVE
    npx agentgate-0g status <id>    # lihat payTo, endpoint, harga, attestation
-   curl -i https://0g-gateway.mdloglabs.org/svc/<id>   # harus 402 (bukan 403/404/503)
+   curl -i https://0g-gateway.equiflow.xyz/svc/<id>   # harus 402 (bukan 403/404/503)
    ```
 
 > **💸 Tidak ada minimum transfer.** Batas bawahnya hanya `MIN_PRICE_WEI` di
@@ -114,7 +114,7 @@ Tidak perlu clone repo. Sisi buyer tidak butuh API key apa pun (verifikasi
 dilakukan server). Anda hanya perlu: key 0G funded + cara memanggil kontrak +
 `curl`.
 
-Anggap `GW=https://0g-gateway.mdloglabs.org` dan service id `ID`.
+Anggap `GW=https://0g-gateway.equiflow.xyz` dan service id `ID`.
 
 ### 1. Ambil invoice (402)
 
@@ -130,7 +130,7 @@ Contoh body (ambil empat nilai ini):
   "maxAmountRequired":"1000000000000000",    // ← harga dalam WEI (1 OG = 1e18)
   "asset":"OG",
   "payTo":"0xde24…",                         // ← tujuan pembayaran (address)
-  "resource":"https://0g-gateway.mdloglabs.org/svc/ID",
+  "resource":"https://0g-gateway.equiflow.xyz/svc/ID",
   "extra":{
     "nonce":"1729132567522738",              // ← nonce yang WAJIB dipakai
     "serviceId": 1,
