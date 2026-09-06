@@ -15,18 +15,27 @@ export const DEFAULT_ADMIN_TOKEN = 'dev-admin-token';
  * state, so changing these values silently repoints every zero-config user at
  * a registry with no history. Treat an edit here as a breaking release.
  */
-// The audited set, deployed 2026-09-01 in block 52458928. This is not a
-// preference: the Service struct gained `pendingAttestor` and
-// `attestorEffectiveAt`, so this repo's ABI can no longer decode the previous
-// deployment at all — reading it fails with `Bytes value "18" is not a valid
-// boolean` as the decoder walks the wrong offsets. Code and contracts move
-// together or not at all.
+// The rotatable set (11ad4c7), deployed 2026-09-03 in block 52865624. This is
+// not a preference: the Service struct grew from 11 fields to 17, so this repo's
+// ABI cannot decode the previous deployment at all — reading it fails with
+// `Bytes value "32" is not a valid boolean` as the decoder walks the wrong
+// offsets. Code and contracts move together or not at all.
 //
-// Shipped to npm in 1.0.4, so the zero-config `npx agentgate-0g list` path
-// reads this set too.
-export const DEFAULT_REGISTRY_ADDRESS = '0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1';
-export const DEFAULT_PAYMENT_ROUTER_ADDRESS = '0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F';
-export const DEFAULT_SPEND_GUARD_ADDRESS = '0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781';
+// That rule was written here after the FIRST time it was broken (the same
+// failure, quoting "18" instead of "32") and broken again anyway, because
+// nothing enforced it: 11ad4c7 regenerated abi.ts correctly and left these
+// addresses pointing at the contract before it. It is enforced now —
+// `abiHashes` below records the shape each address answers to, and
+// e2e/registry-abi-pin.test.ts fails offline on any commit that moves one
+// without the other.
+//
+// NOT yet shipped to npm: agentgate-0g 1.0.5 is the published version and it
+// carries the PREVIOUS set, so `npx agentgate-0g list` keeps reading the old
+// registry — which still holds its four services — until the next release.
+// Cutting one is what moves zero-config users over.
+export const DEFAULT_REGISTRY_ADDRESS = '0xDB3C29a09FdDe79828208603B743E769E9f6dBEe';
+export const DEFAULT_PAYMENT_ROUTER_ADDRESS = '0xCC3bbd10eBA7aa24F4F722E00e714e1413182c34';
+export const DEFAULT_SPEND_GUARD_ADDRESS = '0xfEA4236162d7126d90D59Dc15bBb8A93b3786938';
 
 /**
  * The router address mock mode advertises in its 402 invoices.
@@ -114,6 +123,23 @@ const TTL_SAFETY_MARGIN_MS = 60_000;
 export const MAX_INVOICE_TTL_MS =
   TERMS_CHANGE_DELAY_MS - SERVICE_CACHE_TTL_MS - TTL_SAFETY_MARGIN_MS;
 
+/**
+ * sha256 of each contract ABI, as the recorded deployment actually answers to
+ * it — `JSON.stringify` of the array in packages/chain/src/abi.ts, hashed.
+ *
+ * An address alone does not say WHICH VERSION of a contract lives there, and a
+ * mismatched ABI does not fail loudly: viem decodes at the old offsets and
+ * either returns convincing nonsense or throws about a type it never reached in
+ * the source. Recording the shape next to the address is what lets
+ * e2e/registry-abi-pin.test.ts catch, offline, an ABI that moved without a
+ * redeploy. Written by scripts/set-deployment.ts, never by hand.
+ */
+export interface AbiHashes {
+  registry: string;
+  router: string;
+  spendGuard: string;
+}
+
 export interface NetworkProfile {
   network: string;
   chainId: number;
@@ -122,6 +148,7 @@ export interface NetworkProfile {
   registry: string;
   router: string;
   spendGuard: string;
+  abiHashes: AbiHashes;
 }
 
 /**
@@ -145,6 +172,11 @@ export const NETWORK_PROFILES: Record<string, NetworkProfile> = {
     registry: DEFAULT_REGISTRY_ADDRESS,
     router: DEFAULT_PAYMENT_ROUTER_ADDRESS,
     spendGuard: DEFAULT_SPEND_GUARD_ADDRESS,
+    abiHashes: {
+      registry: 'f974c4c3f15160d727d3a2fee43c5fe1f1a441d787645bc7d1c66c9e0b5a3bf2',
+      router: '5f2a6161970e2440ccab4813b4c7fc93cb9a04596de333d9b8efa60b61587b73',
+      spendGuard: '485afa918375f547ec3a16816b14ce92d8ea68bdcf63f2937e13e8a3199a6b9d',
+    },
   },
   mainnet: {
     network: '0g-mainnet',
@@ -154,6 +186,7 @@ export const NETWORK_PROFILES: Record<string, NetworkProfile> = {
     registry: '',
     router: '',
     spendGuard: '',
+    abiHashes: { registry: '', router: '', spendGuard: '' },
   },
 };
 

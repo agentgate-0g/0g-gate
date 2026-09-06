@@ -51,14 +51,21 @@ export interface ApiFailure {
 
 /**
  * Maps any error thrown while talking to the chain layer to a stable JSON
- * error shape. Devnet down / RPC outage / client failures all surface as
- * 503 {error:"chain_unreachable"} so the UI can show one clear banner.
+ * error shape. A devnet that is down, an RPC outage and a dead socket are all
+ * the same thing to a reader, and all surface as 503
+ * {error:"chain_unreachable"} so the UI can show one clear banner.
+ *
+ * An AgentGateError is NOT one of those. It already carries the code and status
+ * the layer that raised it chose, and flattening those into "chain unreachable"
+ * is how a registry whose ABI no longer matches the deployment — a healthy node
+ * answering perfectly well — reached the operator as "the chain is down", under
+ * a banner offering to restart it.
  */
 export function toApiFailure(err: unknown, route: string): ApiFailure {
   const message = err instanceof Error ? err.message : String(err);
-  if (isAgentGateError(err) && err.code === 'CONFIG_INVALID') {
-    log.error('config invalid', { route, message });
-    return { status: 500, body: { error: 'config_invalid' } };
+  if (isAgentGateError(err)) {
+    log.error(err.code, { route, message });
+    return { status: err.httpStatus, body: { error: err.code.toLowerCase() } };
   }
   log.warn('chain unreachable', { route, message });
   return { status: 503, body: { error: 'chain_unreachable' } };

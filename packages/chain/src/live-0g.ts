@@ -4,7 +4,7 @@ import {
   BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient,
   defineChain, http, parseEventLogs, TransactionReceiptNotFoundError,
   WaitForTransactionReceiptTimeoutError,
-  type Chain, type Hash, type PublicClient, type TransactionReceipt,
+  type Abi, type Chain, type Hash, type PublicClient, type TransactionReceipt,
   type Transport, type WalletClient,
 } from 'viem';
 import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
@@ -17,6 +17,7 @@ import {
 } from '@agentgate/shared';
 import { normalizeAddress, shortAddress } from './address';
 import { PAYMENT_ROUTER_ABI, REGISTRY_ABI } from './abi';
+import { missingSelectors } from './deployment-shape';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
@@ -109,6 +110,47 @@ function isRevertNamed(err: unknown, errorName: string): boolean {
 /** True when a read reverted because the service id is not registered. */
 function isServiceNotFound(err: unknown): boolean {
   return isRevertNamed(err, 'ServiceNotFound');
+}
+
+/**
+ * Decode failures, matched on error NAME rather than on imported classes: viem
+ * throws these from a dozen small classes across its abi and encoding modules,
+ * not all of which are re-exported from the package root, and the set grows
+ * between minor versions. A name this misses falls through to the generic
+ * handling that existed before — so the heuristic can only under-report.
+ */
+const ABI_DECODE_ERROR = /^(AbiDecoding|InvalidAbiDecoding|InvalidBytes|InvalidHex)/;
+
+/**
+ * True when a read REACHED the contract and came back with bytes the shipped ABI
+ * cannot decode.
+ *
+ * This is the signature of a deployment that has drifted from
+ * packages/chain/src/abi.ts, and it is worth separating from every other read
+ * failure because it is the one that lies. The node is healthy, the address
+ * holds code, the call returns 200 — and the operator is handed a Solidity type
+ * error about a `bool` they never asked for. Reported as "chain unreachable",
+ * which is where it used to land, it sends the investigation at an RPC that has
+ * nothing wrong with it.
+ */
+function isAbiDecodeFailure(err: unknown): boolean {
+  return (
+    err instanceof BaseError && err.walk((e) => ABI_DECODE_ERROR.test((e as Error).name)) !== null
+  );
+}
+
+/** The actionable version of a decode failure: what drifted, and what fixes it. */
+function abiMismatch(registry: string, fn: string, err: unknown): AgentGateError {
+  const detail = err instanceof BaseError ? err.shortMessage : String(err);
+  return new AgentGateError(
+    'registry_abi_mismatch',
+    `registry ${registry} answered ${fn} with data that packages/chain/src/abi.ts ` +
+      `cannot decode (${detail}). The contract at that address is not the one this ` +
+      'build was compiled against. Redeploy the current contracts and re-record them ' +
+      'with `npx tsx scripts/set-deployment.ts`, or point REGISTRY_CONTRACT_ADDRESS ' +
+      'at a deployment that matches.',
+    500,
+  );
 }
 
 /**
@@ -238,14 +280,20 @@ export class Live0gClient implements ChainClient {
     // Only check what is actually configured — a read-only client legitimately
     // runs without a router, and `router()`/`registry()` already fail closed
     // with a clearer message when one is needed but unset.
-    const wanted: [string, string][] = [];
+    const wanted: { label: string; address: string; abi: Abi; code: string }[] = [];
     if (this.cfg.registryContractAddress !== '') {
-      wanted.push(['REGISTRY_CONTRACT_ADDRESS', this.cfg.registryContractAddress]);
+      wanted.push({
+        label: 'REGISTRY_CONTRACT_ADDRESS', address: this.cfg.registryContractAddress,
+        abi: REGISTRY_ABI as unknown as Abi, code: 'registry_abi_mismatch',
+      });
     }
     if (this.cfg.paymentRouterAddress !== '') {
-      wanted.push(['PAYMENT_ROUTER_ADDRESS', this.cfg.paymentRouterAddress]);
+      wanted.push({
+        label: 'PAYMENT_ROUTER_ADDRESS', address: this.cfg.paymentRouterAddress,
+        abi: PAYMENT_ROUTER_ABI as unknown as Abi, code: 'router_abi_mismatch',
+      });
     }
-    for (const [label, address] of wanted) {
+    for (const { label, address, abi, code: mismatchCode } of wanted) {
       const code = await this.pub.getCode({ address: normalizeAddress(address) as `0x${string}` });
       if (code === undefined || code === '0x') {
         throw new AgentGateError(
@@ -253,6 +301,24 @@ export class Live0gClient implements ChainClient {
           `${label}=${address} has no code on chain ${this.cfg.zgChainId} (${this.cfg.zgNetwork}). ` +
             'This is what a testnet address left over on a mainnet config looks like. ' +
             'A payment sent to a codeless address SUCCEEDS on-chain and is unrecoverable.',
+          503,
+        );
+      }
+      // Holding code is not the same as being the contract this build was
+      // compiled against. Every selector the ABI declares must be dispatchable
+      // by what is actually there — otherwise the gateway boots, answers
+      // /healthz, and 500s every read, which is the one failure mode readiness
+      // exists to catch. The bytecode is already in hand, so this costs nothing.
+      const missing = missingSelectors(abi, code);
+      if (missing.length > 0) {
+        throw new AgentGateError(
+          mismatchCode,
+          `${label}=${address} cannot dispatch ${missing.length} function(s) that ` +
+            `packages/chain/src/abi.ts declares: ${missing.slice(0, 5).join(', ')}` +
+            `${missing.length > 5 ? ', …' : ''}. The deployment is older than this build. ` +
+            'Redeploy the current contracts and re-record them with ' +
+            '`npx tsx scripts/set-deployment.ts`, or point this address at a deployment ' +
+            'that matches.',
           503,
         );
       }
@@ -318,6 +384,7 @@ export class Live0gClient implements ChainClient {
       // through to a generic 500), so this distinction matters regardless of
       // which 5xx a given throw ends up as.
       if (isServiceNotFound(err)) return null;
+      if (isAbiDecodeFailure(err)) throw abiMismatch(this.registry(), 'getService', err);
       throw err;
     }
   }

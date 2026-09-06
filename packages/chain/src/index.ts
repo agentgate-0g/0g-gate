@@ -7,6 +7,7 @@ export { Live0gClient } from './live-0g';
 export { recoverSigner, type OwnerSignatureResult } from './signature';
 export { normalizeAddress, isAddress, sameAddress, shortAddress, addressFromPrivateKey } from './address';
 export { REGISTRY_ABI, PAYMENT_ROUTER_ABI, SPEND_GUARD_ABI } from './abi';
+export { abiHash, missingSelectors } from './deployment-shape';
 
 /**
  * Picks the ChainClient implementation by `config.mode` (SPEC §4):
