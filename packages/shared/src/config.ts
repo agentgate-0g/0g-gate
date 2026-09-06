@@ -243,6 +243,17 @@ export interface AgentGateConfig {
   trustProxy: number;
   // live mode (0G Galileo Testnet)
   zgRpcUrl: string;
+  /**
+   * How long to keep asking for a transaction receipt before reporting it
+   * unconfirmed.
+   *
+   * 0G reports a block before its receipts are queryable and the public RPC is
+   * load-balanced, so "not found" routinely means "not from this peer yet".
+   * Giving up on the first miss is what let a paid call return
+   * TX_RECEIPT_UNCONFIRMED for a transfer that had already succeeded — the
+   * buyer paid and was served nothing.
+   */
+  zgReceiptTimeoutMs: number;
   zgChainId: number;
   zgNetwork: string;
   zgExplorerUrl: string;
@@ -378,6 +389,7 @@ export function loadConfig(
   // deployment, but the DEFAULTS are never a mix of two networks.
   const profile = networkProfile(readStr(env, 'ZG_NETWORK_PROFILE', DEFAULT_NETWORK_PROFILE));
   const zgRpcUrl = readUrl(env, 'ZG_RPC_URL', profile.rpcUrl, ['http:', 'https:']);
+  const zgReceiptTimeoutMs = readInt(env, 'ZG_RECEIPT_TIMEOUT_MS', 180_000, 1_000, Number.MAX_SAFE_INTEGER);
   const zgChainId = readInt(env, 'ZG_CHAIN_ID', profile.chainId, 1, Number.MAX_SAFE_INTEGER);
   const zgNetwork = readStr(env, 'ZG_NETWORK', profile.network);
   const zgExplorerUrl = readUrl(env, 'ZG_EXPLORER_URL', profile.explorerUrl, ['http:', 'https:']);
@@ -445,6 +457,7 @@ export function loadConfig(
     upstreamTimeoutMs,
     trustProxy,
     zgRpcUrl,
+    zgReceiptTimeoutMs,
     zgChainId,
     zgNetwork,
     zgExplorerUrl,

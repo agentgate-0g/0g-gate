@@ -35,6 +35,7 @@ export function testConfig(overrides: Partial<AgentGateConfig> = {}): AgentGateC
     upstreamTimeoutMs: 5_000,
     trustProxy: 0,
     zgRpcUrl: 'https://evmrpc-testnet.0g.ai',
+    zgReceiptTimeoutMs: 180_000,
     zgChainId: 16602,
     zgNetwork: '0g-galileo',
     zgExplorerUrl: 'https://chainscan-galileo.0g.ai',

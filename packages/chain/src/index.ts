@@ -8,6 +8,11 @@ export { recoverSigner, type OwnerSignatureResult } from './signature';
 export { normalizeAddress, isAddress, sameAddress, shortAddress, addressFromPrivateKey } from './address';
 export { REGISTRY_ABI, PAYMENT_ROUTER_ABI, SPEND_GUARD_ABI } from './abi';
 export { abiHash, missingSelectors } from './deployment-shape';
+export {
+  awaitReceipt, isReceiptLag,
+  DEFAULT_RECEIPT_TIMEOUT_MS, RECEIPT_ATTEMPT_TIMEOUT_MS,
+  type AwaitReceiptOptions,
+} from './receipt';
 
 /**
  * Picks the ChainClient implementation by `config.mode` (SPEC §4):

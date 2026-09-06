@@ -3,7 +3,6 @@ import {
   keccak256,
   BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient,
   defineChain, http, parseEventLogs, TransactionReceiptNotFoundError,
-  WaitForTransactionReceiptTimeoutError,
   type Abi, type Chain, type Hash, type PublicClient, type TransactionReceipt,
   type Transport, type WalletClient,
 } from 'viem';
@@ -16,6 +15,10 @@ import {
   type VerifyResult, type VerifyTransferQuery, type Wei,
 } from '@agentgate/shared';
 import { normalizeAddress, shortAddress } from './address';
+import {
+  awaitReceipt, isReceiptLag,
+  DEFAULT_RECEIPT_TIMEOUT_MS, RECEIPT_ATTEMPT_TIMEOUT_MS,
+} from './receipt';
 import { PAYMENT_ROUTER_ABI, REGISTRY_ABI } from './abi';
 import { missingSelectors } from './deployment-shape';
 
@@ -717,13 +720,27 @@ export class Live0gClient implements ChainClient {
     // than a block to serve the receipt. viem's DEFAULT is 6 retries with
     // (1 << n) * 200ms backoff — about 12s total, not the 180s `timeout`
     // suggests — which a lagging node blows straight through.
+    //
+    // One call is not enough on its own, whatever its retry count: it stays on
+    // the peer it started with, and a peer that is behind stays behind. So the
+    // call is re-entered against a wall-clock deadline (see ./receipt), which
+    // both gives the load balancer another chance and makes the total wait a
+    // number an operator can set rather than a property of viem's backoff.
     let receipt: TransactionReceipt;
     try {
-      receipt = await this.pub.waitForTransactionReceipt({
-        hash,
-        retryCount: 20,
-        pollingInterval: 1_000,
-      });
+      receipt = await awaitReceipt(
+        () =>
+          this.pub.waitForTransactionReceipt({
+            hash,
+            retryCount: 6,
+            pollingInterval: 1_000,
+            timeout: RECEIPT_ATTEMPT_TIMEOUT_MS,
+          }),
+        // `?? DEFAULT` and not a required field: every test in this package
+        // builds its config with `as unknown as AgentGateConfig`, so a value
+        // added here is simply absent at runtime in all of them.
+        { timeoutMs: this.cfg.zgReceiptTimeoutMs ?? DEFAULT_RECEIPT_TIMEOUT_MS },
+      );
     } catch (err: unknown) {
       // Losing the receipt is NOT the same as the write failing, and the
       // difference is expensive: registerService is not idempotent, so an
@@ -731,10 +748,7 @@ export class Live0gClient implements ChainClient {
       // re-runs `wrap` mints a SECOND service on-chain that cannot be deleted.
       // Say what is actually known — the hash, and that the state is unknown
       // rather than failed.
-      if (
-        err instanceof TransactionReceiptNotFoundError ||
-        err instanceof WaitForTransactionReceiptTimeoutError
-      ) {
+      if (isReceiptLag(err)) {
         throw new AgentGateError(
           'TX_RECEIPT_UNCONFIRMED',
           `${what} was submitted as tx ${hash} but its receipt did not arrive in time. ` +
