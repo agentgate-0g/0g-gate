@@ -44,7 +44,7 @@ attest → score, with TTL + inactive paths).
 **Smart contracts** (Solidity, Foundry — no node needed):
 
 ```bash
-cd contracts-evm && forge test        # 77 tests across the five suites
+cd contracts-evm && forge test        # 143 tests across nine suites
 ```
 
 Covered: registration validation (empty/whitespace name, sub-floor price, empty `accepts`),
@@ -110,7 +110,7 @@ forge script script/Deploy.s.sol:Deploy --rpc-url "$ZG_RPC_URL" \
   --private-key "$DEPLOYER_KEY" --broadcast
 ```
 
-All three contracts cost roughly **0.014 OG** in total — inside a single day's faucet grant.
+All three contracts cost **0.0196 OG** in total (4,900,008 gas at 4 gwei) — inside a single day's faucet grant on Galileo.
 The script prints `REGISTRY_CONTRACT_ADDRESS=`, `PAYMENT_ROUTER_ADDRESS=` and
 `SPEND_GUARD_ADDRESS=`. Verify each on <https://chainscan-galileo.0g.ai>.
 
@@ -201,7 +201,7 @@ AGENTGATE_MODE=live REGISTRY_CONTRACT_ADDRESS=0x… npx tsx scripts/smoke-live-r
 |---|---|
 | `npm run typecheck` | clean, exit 0 |
 | `npm test` | 423 passed (31 files) |
-| `cd contracts-evm && forge test` | 77 passed |
+| `cd contracts-evm && forge test` | 143 passed |
 | `npm run demo` | exit 0; payment + attestation tx hashes + score `1/1` |
 | `npm run dev:seed` + dashboard | catalog populated; `/svc/1` → 402; `/activity` has events |
 | Live dashboard `/api/services` | `"network":"0g-galileo"`, service `(1,1)` |
@@ -229,5 +229,5 @@ AGENTGATE_MODE=live REGISTRY_CONTRACT_ADDRESS=0x… npx tsx scripts/smoke-live-r
   malformed. The message names the variable and never the value — check the env var it names,
   and note that a stray quote or trailing newline counts.
 - **Faucet says you already claimed:** the cap is 0.1 OG per wallet per day. Deploying all
-  three contracts fits inside one grant (~0.014 OG), so there is no need to split it across
+  three contracts fits inside one grant (0.0196 OG), so there is no need to split it across
   two days — but a fresh demo wallet needs its own claim.

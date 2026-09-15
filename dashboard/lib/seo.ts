@@ -6,7 +6,7 @@ import type { Metadata } from 'next';
  * a self-hosted deployment.
  */
 export const SITE_URL = (
-  process.env.NEXT_PUBLIC_SITE_URL ?? 'https://agentgate-0g.mdloglabs.org'
+  process.env.NEXT_PUBLIC_SITE_URL ?? 'https://agentgate.equiflow.xyz'
 ).replace(
   /\/+$/,
   '',

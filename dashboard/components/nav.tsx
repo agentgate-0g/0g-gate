@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useNetwork } from '@/components/network-context';
 
 const LINKS = [
   { href: '/catalog', label: 'Catalog' },
@@ -20,6 +21,7 @@ function GateMark() {
 
 export function Nav() {
   const pathname = usePathname();
+  const { label } = useNetwork();
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-ink/85 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 sm:px-8">
@@ -29,7 +31,7 @@ export function Nav() {
             Agent<span className="text-accent transition-colors group-hover:text-white">Gate</span>
           </span>
           <span className="hidden border border-line px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.2em] text-mut sm:inline">
-            0g galileo testnet
+            {label}
           </span>
         </Link>
 

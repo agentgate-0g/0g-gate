@@ -1,7 +1,8 @@
-# contracts-evm/ — AgentGate EVM Smart Contracts (0G Galileo Testnet)
+# contracts-evm/ — AgentGate EVM Smart Contracts (0G Mainnet + Galileo Testnet)
 
-The on-chain layer of AgentGate on **0G Galileo Testnet**: three Solidity
-contracts, built and tested with [Foundry](https://getfoundry.sh).
+The on-chain layer of AgentGate, deployed byte-identically on **0G Mainnet**
+(the default) and **0G Galileo Testnet**: three Solidity contracts, built and
+tested with [Foundry](https://getfoundry.sh).
 
 | Contract | File | Purpose |
 |---|---|---|
@@ -12,16 +13,21 @@ contracts, built and tested with [Foundry](https://getfoundry.sh).
 All three: `pragma solidity 0.8.28`, no constructor arguments, not upgradable
 (there is no proxy — a new version means a new address).
 
-## Network
+## Networks
 
-| Parameter | Value |
-|---|---|
-| Name | 0G Galileo Testnet |
-| Chain ID | **16602** |
-| RPC | `https://evmrpc-testnet.0g.ai` |
-| Explorer | `https://chainscan-galileo.0g.ai` |
-| Faucet | `https://faucet.0g.ai` (0.1 OG per wallet per day) |
-| Native token | OG, 18 decimals |
+| Parameter | 0G Mainnet (`ZG_NETWORK_PROFILE=mainnet`, the default) | 0G Galileo Testnet (`ZG_NETWORK_PROFILE=galileo`) |
+|---|---|---|
+| Chain ID | **16661** | **16602** |
+| RPC | `https://evmrpc.0g.ai` | `https://evmrpc-testnet.0g.ai` |
+| Explorer | `https://chainscan.0g.ai` | `https://chainscan-galileo.0g.ai` |
+| Funding | real OG | `https://faucet.0g.ai` (0.1 OG per wallet per day) |
+| Native token | OG, 18 decimals | OG, 18 decimals |
+
+The mainnet RPC prunes historical **state** after ~100 blocks (`eth_call` /
+`eth_getCode` at an older block fails with "missing trie node"); the testnet RPC
+is a full archive. Anything that needs the past on mainnet reads receipts, logs
+and headers — `scripts/set-deployment.ts` finds deploy blocks from the creation
+receipts for that reason.
 
 `evm_version = "cancun"` in `foundry.toml` was verified against the live node
 before this was relied on: 0G Galileo executes `MCOPY` (a Cancun-only opcode)
@@ -39,7 +45,7 @@ was meaningful.
 > down). Nothing here is upgradable, so a future fix is a *new* address starting
 > from empty state — no service and no score carried across.
 
-### Deployed set — 0G Galileo Testnet, 2026-09-01
+### Deployed sets
 
 > **No external audit.** Where this page says "reviewed", it means rounds of
 > adversarial self-review inside this repository, backed by the Foundry suite —
@@ -47,15 +53,27 @@ was meaningful.
 > firm has looked at this code. Read every claim on this page with that in mind,
 > and size any position accordingly.
 
+**0G Galileo Testnet** (chain 16602) — deployed 2026-09-03, block 52865624:
+
 | Contract | Address | Explorer |
 |---|---|---|
-| `AgentGateRegistry` | `0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1` | [explorer](https://chainscan-galileo.0g.ai/address/0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1) |
-| `PaymentRouter` | `0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F` | [explorer](https://chainscan-galileo.0g.ai/address/0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F) |
-| `SpendGuard` | `0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781` | [explorer](https://chainscan-galileo.0g.ai/address/0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781) |
+| `AgentGateRegistry` | `0xDB3C29a09FdDe79828208603B743E769E9f6dBEe` | [explorer](https://chainscan-galileo.0g.ai/address/0xDB3C29a09FdDe79828208603B743E769E9f6dBEe) |
+| `PaymentRouter` | `0xCC3bbd10eBA7aa24F4F722E00e714e1413182c34` | [explorer](https://chainscan-galileo.0g.ai/address/0xCC3bbd10eBA7aa24F4F722E00e714e1413182c34) |
+| `SpendGuard` | `0xfEA4236162d7126d90D59Dc15bBb8A93b3786938` | [explorer](https://chainscan-galileo.0g.ai/address/0xfEA4236162d7126d90D59Dc15bBb8A93b3786938) |
 
-Block 52458928, all three in one block. Total cost **0.015197 OG**
-(3,799,198 gas at 6 gwei). Constructor wiring verified live: `Registry.ROUTER()`
-returns the router and `SpendGuard.REGISTRY()` returns the registry.
+**0G Mainnet** (chain 16661) — deployed 2026-09-15, blocks 44406357–44406358:
+
+| Contract | Address | Explorer |
+|---|---|---|
+| `AgentGateRegistry` | `0x48144BF9d966789bf4Db4e84349d4F4878a4b7Da` | [explorer](https://chainscan.0g.ai/address/0x48144BF9d966789bf4Db4e84349d4F4878a4b7Da) |
+| `PaymentRouter` | `0x5102EB216b65CF950D3e88c8ddD51008de0845eF` | [explorer](https://chainscan.0g.ai/address/0x5102EB216b65CF950D3e88c8ddD51008de0845eF) |
+| `SpendGuard` | `0xDfD0f8eE32Cb01015cD131d463E83e6974A9D761` | [explorer](https://chainscan.0g.ai/address/0xDfD0f8eE32Cb01015cD131d463E83e6974A9D761) |
+
+Each set cost **0.0196 OG** (4,900,008 gas at 4 gwei); the bytecode is identical
+on both networks (the recorded ABI hashes match). Constructor wiring verified
+live on both by `scripts/set-deployment.ts`: `Registry.ROUTER()` returns the
+router and `SpendGuard.REGISTRY()` returns the registry. Source is verified on
+both explorers.
 
 Closes three rounds of in-repo self-review findings. Note the operational consequence: a
 service's attestor may no longer be its owner or its payout address, so seeding
@@ -86,18 +104,15 @@ and is paid, the gateway attests, and the buyer is none of them.
 The keys for the seller and buyer wallets are mode-600 files in
 `~/.agentgate-{payout,buyer}.key` and are not in the repo.
 
-### The same set again — deploy cost and bytecode verification
+### Deploy cost and bytecode verification
 
-| Contract | Address | Explorer |
-|---|---|---|
-| `AgentGateRegistry` | `0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1` | [explorer](https://chainscan-galileo.0g.ai/address/0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1) |
-| `PaymentRouter` | `0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F` | [explorer](https://chainscan-galileo.0g.ai/address/0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F) |
-| `SpendGuard` | `0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781` | [explorer](https://chainscan-galileo.0g.ai/address/0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781) |
-
-Deployed 2026-09-01 to 0G Galileo Testnet (chain 16602) in block 52458928 —
-all three in a single block. Total cost 0.0152 OG (3,799,198 gas at a 4 gwei
-priority fee). Bytecode verified live with `eth_getCode`: 9,069 / 940 / 6,133
-bytes, matching `forge build --sizes` exactly.
+Both sets above were deployed by `script/Deploy.s.sol` in dependency order
+(Router → Registry → Guard) and cost 4,900,008 gas each. Bytecode verified live
+with `eth_getCode` on both networks: 13,956 / 940 / 6,142 bytes for
+registry / router / guard, matching `forge build --sizes` exactly. The earlier
+Galileo set from 2026-09-01 (`0x73bf79e3…`, block 52458928) predates the
+17-field `Service` struct and was superseded — it is the deployment the
+ABI-drift guard in `scripts/set-deployment.ts` was written for.
 
 These addresses are also the CLI's built-in defaults
 (`packages/shared/src/config.ts`), which is what lets the published package read
@@ -151,7 +166,7 @@ size-related deploy risk.
 
 ```bash
 cd contracts-evm
-forge test          # 77 tests across 5 suites, all passing
+forge test          # 143 tests across 9 suites, all passing
 forge test -vvv      # verbose output, useful on failure
 ```
 
@@ -186,11 +201,11 @@ intentionally not been run yet.
 
 **To deploy for real:**
 
-1. Fund the deployer address at <https://faucet.0g.ai> (0.1 OG per wallet per
-   day). At 0G's ~4 gwei gas price, deploying all three contracts costs
-   roughly **0.014 OG** — about 7× headroom inside a single day's faucet
-   grant. **One faucet claim is enough for all three deploys; there is no
-   need to split the deploy across two days.**
+1. Fund the deployer address. At 0G's ~4 gwei gas price, deploying all three
+   contracts costs **0.0196 OG** (4,900,008 gas, measured on both networks). On
+   Galileo that is about 5× headroom inside a single day's grant from
+   <https://faucet.0g.ai> (0.1 OG per wallet per day) — **one faucet claim is
+   enough for all three deploys**. On mainnet it is real OG.
 2. Run:
    ```bash
    cd contracts-evm
@@ -202,19 +217,25 @@ intentionally not been run yet.
      --broadcast
    ```
 
-   For **mainnet**, name the chain and verify — see
+   For **mainnet**, name the chain, then verify — see
    [docs/DEPLOY.md](../docs/DEPLOY.md#deploying-to-mainnet--name-the-chain-and-verify):
    ```bash
-   ZG_EXPLORER_API_KEY=<key> forge script script/Deploy.s.sol:Deploy \
+   forge script script/Deploy.s.sol:Deploy \
      --sig "runOnChain(uint256)" 16661 \
      --rpc-url mainnet --private-key "$DEPLOYER_KEY" \
      --priority-gas-price 4000000000 --with-gas-price 6000000000 \
-     --broadcast --verify --verifier etherscan
+     --broadcast
+   V="--verifier custom --verifier-url https://chainscan.0g.ai/open/api --verifier-api-key placeholder --chain-id 16661 --watch"
+   forge verify-contract $V <router>   src/PaymentRouter.sol:PaymentRouter
+   forge verify-contract $V <registry> src/AgentGateRegistry.sol:AgentGateRegistry --constructor-args $(cast abi-encode "constructor(address)" <router>)
+   forge verify-contract $V <guard>    src/SpendGuard.sol:SpendGuard      --constructor-args $(cast abi-encode "constructor(address)" <registry>)
    ```
    `runOnChain` reverts unless the connected chain really is 16661, because the
    `galileo` endpoint is `"${ZG_RPC_URL}"` and deploys wherever that points.
-   `--verify` matters: unreadable source on a money-holding contract is not
-   shippable, and the verifier base is `/open/api`, not `/api`.
+   Verification matters — unreadable source on a money-holding contract is not
+   shippable — and it is the **custom** verifier against `/open/api` (not
+   `/api`) that works: Foundry's built-in `etherscan` verifier rejects chain
+   16661 as unsupported. This is how both deployed sets were verified.
 
 > **0G rejects Foundry's auto-estimated fee — pass the tip explicitly.** 0G's base
 > fee is ~7 **wei**, so `forge script` derives a priority fee of 1 wei and the node

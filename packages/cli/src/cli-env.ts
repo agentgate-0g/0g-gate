@@ -1,5 +1,3 @@
-import { DEFAULT_REGISTRY_ADDRESS } from '@agentgate/shared';
-
 /** Config-bearing CLI flags shared across commands (all optional). */
 export interface CliConfigFlags {
   mode?: string;
@@ -28,9 +26,12 @@ function pick(
 
 /**
  * Builds the env overlay the CLI hands to `loadConfig`. Precedence per key:
- * explicit flag > process.env (non-empty) > CLI built-in default. The published
- * CLI targets 0G Galileo + the deployed registry by default; keys with no CLI
- * default are left to `loadConfig`'s own defaults (RPC URL, chain id, …).
+ * explicit flag > process.env (non-empty) > CLI built-in default. The only CLI
+ * default is live mode; every chain value — RPC, chain id, registry, router —
+ * is left to `loadConfig`, which takes it from the selected network profile.
+ * The CLI used to inject the Galileo registry address here as a "default",
+ * which silently overrode the profile: `ZG_NETWORK_PROFILE=mainnet` read the
+ * Galileo registry address on mainnet and found no code there.
  */
 export function resolveCliEnv(flags: CliConfigFlags, env: Env = process.env): Env {
   const overlay: Env = { ...env };
@@ -38,10 +39,7 @@ export function resolveCliEnv(flags: CliConfigFlags, env: Env = process.env): En
     if (value !== undefined) overlay[key] = value;
   };
   set('AGENTGATE_MODE', pick(flags.mode, env.AGENTGATE_MODE, 'live'));
-  set(
-    'REGISTRY_CONTRACT_ADDRESS',
-    pick(flags.registry, env.REGISTRY_CONTRACT_ADDRESS, DEFAULT_REGISTRY_ADDRESS),
-  );
+  set('REGISTRY_CONTRACT_ADDRESS', pick(flags.registry, env.REGISTRY_CONTRACT_ADDRESS));
   set('ZG_RPC_URL', pick(flags.rpcUrl, env.ZG_RPC_URL));
   set('SELLER_SIGNER_KEY', pick(flags.key, env.SELLER_SIGNER_KEY));
   set('AGENTGATE_ADMIN_TOKEN', pick(flags.adminToken, env.AGENTGATE_ADMIN_TOKEN));

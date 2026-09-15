@@ -38,7 +38,8 @@ export default function Page() {
         upstream&apos;s status and <M>Content-Type</M> through unchanged on a paid call. Ports below
         are the repo defaults; override with environment variables documented in{' '}
         <DocLink href="/docs/configuration">Configuration</DocLink>. The public hosted gateway runs
-        at <M>https://0g-gateway.mdloglabs.org</M> (live mode, <M>0g-galileo</M>); the{' '}
+        at <M>https://0g-gateway.equiflow.xyz</M> (live mode, <M>0g-mainnet</M>; the Galileo
+        testnet catalog is served by <M>https://0g-gateway.mdloglabs.org</M>); the{' '}
         <M>localhost:4021</M> examples below target a self-hosted or local gateway.
       </P>
 
@@ -82,7 +83,9 @@ export default function Page() {
       <CodeBlock label="200 OK" code={'{\n  "ok": true,\n  "network": "mock"\n}'} />
       <P>
         <M>network</M> is the chain network string: <M>mock</M> in mock mode, or the configured
-        0G network (for example <M>0g-galileo</M>) in live mode.
+        0G network (<M>0g-mainnet</M> or <M>0g-galileo</M>) in live mode. In live mode the body
+        also carries <M>attestor</M>, the address this gateway signs attestations with — the value{' '}
+        <M>agentgate wrap</M> registers as a new service&apos;s attestor by default.
       </P>
 
       {/* ─────────────── GET /readyz ─────────────── */}
@@ -128,10 +131,10 @@ export default function Page() {
           '    "name": "RWA FX & Gold Oracle",\n' +
           '    "description": "USD/IDR rate + gold spot with confidence",\n' +
           '    "endpointUrl": "http://gateway:4021/svc/1",\n' +
-          '    "priceWei": "500000000",\n' +
+          '    "priceWei": "500000000000000000",\n' +
           '    "paymentTarget": "0x<40hex>",\n' +
-          '    "owner": "01...",\n' +
-          '    "attestor": "01...",\n' +
+          '    "owner": "0x<40hex>",\n' +
+          '    "attestor": "0x<40hex>",\n' +
           '    "active": true,\n' +
           '    "createdAt": 1717900000000\n' +
           '  },\n' +
@@ -202,7 +205,8 @@ export default function Page() {
             desc: (
               <>
                 base64(JSON <M>PaymentPayload</M>): <M>x402Version:1</M>,{' '}
-                <M>scheme:"exact-settled"</M>, <M>network:"0g-galileo"</M> (or <M>"mock"</M>),{' '}
+                <M>scheme:"exact-settled"</M>, <M>network:"0g-mainnet"</M> (or{' '}
+                <M>"0g-galileo"</M> / <M>"mock"</M>),{' '}
                 <M>payload.transaction</M> (transaction hash of the router payment),{' '}
                 <M>payload.nonce</M> (the <M>extra.nonce</M> from the challenge),{' '}
                 <M>payload.from</M> (payer address, optional). A malformed value — or a{' '}
@@ -234,7 +238,7 @@ export default function Page() {
           '    {\n' +
           '      "scheme": "exact-settled",\n' +
           '      "network": "mock",\n' +
-          '      "maxAmountRequired": "500000000",\n' +
+          '      "maxAmountRequired": "500000000000000000",\n' +
           '      "asset": "OG",\n' +
           '      "payTo": "0x<40hex>",\n' +
           '      "resource": "http://localhost:4021/svc/1",\n' +
@@ -245,7 +249,8 @@ export default function Page() {
           '        "serviceId": 1,\n' +
           '        "expiresAtMs": 1718000300000,\n' +
           '        "settlement": "0g-payment-router",\n' +
-          '        "nonceEncoding": "u64-decimal"\n' +
+          '        "router": "0x<40hex>",\n' +
+          '        "nonceEncoding": "uint256-decimal"\n' +
           '      }\n' +
           '    }\n' +
           '  ]\n' +
@@ -340,7 +345,7 @@ export default function Page() {
           '    {\n' +
           '      "scheme": "exact-settled",\n' +
           '      "network": "mock",\n' +
-          '      "maxAmountRequired": "500000000",\n' +
+          '      "maxAmountRequired": "500000000000000000",\n' +
           '      "payTo": "0x<40hex>",\n' +
           '      "extra": { "nonce": "44188205571903", "serviceId": 1, "expiresAtMs": 1718000600000, ... }\n' +
           '    }\n' +
@@ -451,17 +456,6 @@ export default function Page() {
             ),
           },
           {
-            name: 'publicKeyHex',
-            type: 'string (hex public key)',
-            required: true,
-            desc: (
-              <>
-                The seller&apos;s recovered signing address, which must equal the
-                service&apos;s on-chain <M>owner</M>.
-              </>
-            ),
-          },
-          {
             name: 'timestamp',
             type: 'number (ms since epoch)',
             required: true,
@@ -478,7 +472,10 @@ export default function Page() {
             required: true,
             desc: (
               <>
-                Signature by <M>publicKeyHex</M> over the canonical self-map message below.
+                EIP-191 (<M>personal_sign</M>) signature over the canonical self-map message
+                below. There is no public-key field: the gateway <em>recovers</em> the signing
+                address from the signature and requires it to equal the service&apos;s on-chain{' '}
+                <M>owner</M>.
               </>
             ),
           },
@@ -493,7 +490,7 @@ export default function Page() {
         label="canonical self-map message (newline-joined, then signed)"
         code={
           'AgentGate/self-map/v1\n' +
-          '0g-galileo\n' +
+          '0g-mainnet\n' +
           '1\n' +
           'https://api.example.com/gold\n' +
           '1718000000000'
@@ -504,9 +501,8 @@ export default function Page() {
         code={
           '{\n' +
           '  "upstreamUrl": "https://api.example.com/gold",\n' +
-          '  "publicKeyHex": "01<hex>",\n' +
           '  "timestamp": 1718000000000,\n' +
-          '  "signatureHex": "<hex>"\n' +
+          '  "signatureHex": "0x<65-byte hex>"\n' +
           '}'
         }
       />
@@ -680,7 +676,7 @@ export default function Page() {
       <H2 id="dashboard">Part 2 — Dashboard read API</H2>
       <P>
         The dashboard&apos;s own read-only routes under <M>dashboard/app/api/*</M>. The hosted
-        instance serves them at <M>https://agentgate-0g.mdloglabs.org/api/*</M>;{' '}
+        instance serves them at <M>https://agentgate.equiflow.xyz/api/*</M>;{' '}
         <M>localhost:3000</M> is the repo default. They run on the Node.js runtime, are
         force-dynamic and never cached, and read the chain through one
         server-side client (the browser never talks to the chain directly). On a chain outage every
@@ -702,7 +698,7 @@ export default function Page() {
           '  "network": "mock",\n' +
           '  "services": [\n' +
           '    {\n' +
-          '      "service": { "id": 1, "name": "RWA FX & Gold Oracle", "priceWei": "500000000", ... },\n' +
+          '      "service": { "id": 1, "name": "RWA FX & Gold Oracle", "priceWei": "500000000000000000", ... },\n' +
           '      "score": { "totalCalls": 100, "successCalls": 95 },\n' +
           '      "trustTier": "trusted"\n' +
           '    }\n' +
@@ -741,8 +737,8 @@ export default function Page() {
           '  "score": { "totalCalls": 100, "successCalls": 95 },\n' +
           '  "trustTier": "trusted",\n' +
           '  "attestations": [ { "serviceId": 1, "success": true, "timestamp": 1718000000000, ... } ],\n' +
-          '  "revenueWei": "47500000000",\n' +
-          '  "balanceWei": "12000000000"\n' +
+          '  "revenueWei": "47500000000000000000",\n' +
+          '  "balanceWei": "12000000000000000000"\n' +
           '}'
         }
       />
@@ -753,8 +749,12 @@ export default function Page() {
         The recent global activity feed, newest first. Type <M>ActivityResponse</M>. The optional{' '}
         <M>?limit=</M> query is clamped to 1–200 (default 50). <M>kind</M> is one of{' '}
         <M>service_registered</M> | <M>payment</M> | <M>attestation</M>; <M>amountWei</M> appears
-        only on <M>payment</M> events and <M>success</M> only on <M>attestation</M> events. In live
-        mode <M>serviceId</M> is <M>null</M> on registration events (the id is assigned on-chain).
+        only on <M>payment</M> events and <M>success</M> only on <M>attestation</M> events.{' '}
+        <M>historyFromBlock</M> is the block the window starts at — the contracts&apos; deploy
+        block, so an empty list means the deployment has never been used — and{' '}
+        <M>lookbackBlocks</M> echoes the operator&apos;s <M>ACTIVITY_LOOKBACK_BLOCKS</M> cap
+        (<M>null</M> when there is none). <M>stale: true</M> marks a response served from the
+        server cache because a live refresh failed.
       </P>
       <CodeBlock
         label="200 OK"
@@ -766,18 +766,20 @@ export default function Page() {
           '      "kind": "payment",\n' +
           '      "txHash": "<64hex>",\n' +
           '      "serviceId": 1,\n' +
-          '      "amountWei": "500000000",\n' +
+          '      "amountWei": "500000000000000000",\n' +
           '      "timestamp": 1718000000000,\n' +
-          '      "detail": "payment of 0.5 OG to 0x<40hex> (nonce 73920184556012)"\n' +
+          '      "detail": "payment of 0.5 OG to 0x<40hex>"\n' +
           '    },\n' +
           '    {\n' +
           '      "kind": "service_registered",\n' +
           '      "txHash": "<64hex>",\n' +
           '      "serviceId": 1,\n' +
           '      "timestamp": 1717900000000,\n' +
-          '      "detail": "service \\"RWA FX & Gold Oracle\\" registered (id 1) at 0.5 OG/call"\n' +
+          '      "detail": "service \\"RWA FX & Gold Oracle\\" registered"\n' +
           '    }\n' +
-          '  ]\n' +
+          '  ],\n' +
+          '  "historyFromBlock": 44406357,\n' +
+          '  "lookbackBlocks": null\n' +
           '}'
         }
       />
@@ -797,7 +799,7 @@ export default function Page() {
           '  "activeServices": 4,\n' +
           '  "totalCalls": 523,\n' +
           '  "successCalls": 487,\n' +
-          '  "revenueWei": "243750000000"\n' +
+          '  "revenueWei": "243750000000000000000"\n' +
           '}'
         }
       />

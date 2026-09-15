@@ -60,8 +60,9 @@ export default function Page() {
         Every command calls <M>loadConfig()</M>, but each config value can be supplied as a{' '}
         <strong>flag or an environment variable</strong> — precedence is{' '}
         <M>flag &gt; env var &gt; built-in default</M>. The published CLI defaults to{' '}
-        <M>live</M> mode and the deployed registry address, so <M>list</M> and <M>status</M> read
-        0G Galileo Testnet with no configuration at all; <M>--mode</M>, <M>--rpc-url</M>,{' '}
+        <M>live</M> mode and the <M>mainnet</M> network profile, so <M>list</M> and <M>status</M> read
+        the 0G Mainnet registry with no configuration at all (<M>ZG_NETWORK_PROFILE=galileo</M>{' '}
+        switches every chain value to the testnet set); <M>--mode</M>, <M>--rpc-url</M>,{' '}
         <M>--registry</M>, <M>--key</M> and <M>--admin-token</M> override the
         matching env vars. The table below covers only what the commands here touch; the full
         list lives in <DocLink href="/docs/configuration">Configuration</DocLink>.
@@ -76,9 +77,25 @@ export default function Page() {
             desc: (
               <>
                 Selects the chain backend. <M>mock</M> uses the in-process devnet (offline);{' '}
-                <M>live</M> targets 0G Galileo Testnet. Reads (<M>list</M>, <M>status</M>) need
-                no keys and no API key at all — attestation history included, since it is a
-                contract view call.
+                <M>live</M> targets 0G (the network named by <M>ZG_NETWORK_PROFILE</M>). Reads
+                (<M>list</M>, <M>status</M>) need no keys and no API key at all — attestation
+                history included, since it is a contract view call.
+              </>
+            ),
+          },
+          {
+            name: 'ZG_NETWORK_PROFILE',
+            type: "'mainnet' | 'galileo'",
+            required: false,
+            default: 'mainnet',
+            desc: (
+              <>
+                Selects the whole chain identity for <M>live</M> mode as one unit — RPC, chain
+                id, network name, explorer and the three contract addresses. <M>mainnet</M> (0G
+                Mainnet, chain 16661, what the hosted gateway serves) is the default;{' '}
+                <M>galileo</M> (0G Galileo Testnet, chain 16602) is the faucet-funded set. There
+                is no flag for it: <M>--rpc-url</M> and <M>--registry</M> override single values
+                of the selected profile.
               </>
             ),
           },
@@ -132,7 +149,7 @@ export default function Page() {
               <>
                 Feeds the default <M>--gateway</M> in <M>mock</M> mode
                 (<M>http://localhost:&lt;MIDDLEWARE_PORT&gt;</M>); <M>live</M> mode defaults{' '}
-                <M>--gateway</M> to the hosted <M>https://0g-gateway.mdloglabs.org</M>.
+                <M>--gateway</M> to the hosted <M>https://0g-gateway.equiflow.xyz</M>.
               </>
             ),
           },
@@ -146,7 +163,7 @@ export default function Page() {
                 Feeds the dashboard detail link printed by <M>wrap</M> in <M>mock</M> mode
                 (<M>http://localhost:&lt;DASHBOARD_PORT&gt;/services/&lt;id&gt;</M>); <M>live</M>{' '}
                 mode links to the hosted{' '}
-                <M>https://agentgate-0g.mdloglabs.org/services/&lt;id&gt;</M>.
+                <M>https://agentgate.equiflow.xyz/services/&lt;id&gt;</M>.
               </>
             ),
           },
@@ -178,13 +195,15 @@ export default function Page() {
           [
             <M key="f2">--rpc-url {'<url>'}</M>,
             <M key="e2">ZG_RPC_URL</M>,
-            <M key="d2">https://evmrpc-testnet.0g.ai</M>,
+            <span key="d2">
+              the selected profile&apos;s RPC — <M>https://evmrpc.0g.ai</M> (mainnet)
+            </span>,
             'all commands',
           ],
           [
             <M key="f3">--registry {'<address>'}</M>,
             <M key="e3">REGISTRY_CONTRACT_ADDRESS</M>,
-            <span key="d3">the deployed registry address</span>,
+            <span key="d3">the selected profile&apos;s deployed registry</span>,
             'all commands',
           ],
           [
@@ -219,7 +238,7 @@ export default function Page() {
         registry. <M>wrap</M> performs two steps: it registers the service on-chain first,
         then maps the upstream on the gateway. In live mode this is a self-service call —{' '}
         <M>wrap</M> signs an ownership challenge with the seller key and POSTs{' '}
-        <M>{'{upstreamUrl, publicKeyHex, timestamp, signatureHex}'}</M> to{' '}
+        <M>{'{upstreamUrl, timestamp, signatureHex}'}</M> to{' '}
         <M>&lt;gateway&gt;/services/&lt;id&gt;/map</M> (no admin token). Mock mode and
         self-hosted admin gateways use the legacy <M>POST &lt;gateway&gt;/admin/services</M>{' '}
         with <M>AGENTGATE_ADMIN_TOKEN</M> instead.
@@ -253,7 +272,7 @@ export default function Page() {
           [
             <M key="g">--gateway {'<url>'}</M>,
             'no',
-            <M key="gd">https://0g-gateway.mdloglabs.org (live) · http://localhost:&lt;MIDDLEWARE_PORT&gt; (mock)</M>,
+            <M key="gd">https://0g-gateway.equiflow.xyz (live) · http://localhost:&lt;MIDDLEWARE_PORT&gt; (mock)</M>,
             'Gateway base URL (this base is what gets stored on-chain; readers compute <base>/svc/<id>). No query/fragment; https required for non-localhost hosts in live mode.',
           ],
           [
@@ -289,10 +308,10 @@ export default function Page() {
         label="output"
         code={[
           'service id:      5',
-          'public endpoint: https://0g-gateway.mdloglabs.org/svc/5',
-          'dashboard:       https://agentgate-0g.mdloglabs.org/services/5',
+          'public endpoint: https://0g-gateway.equiflow.xyz/svc/5',
+          'dashboard:       https://agentgate.equiflow.xyz/services/5',
           'register tx:     0x<txHash>',
-          'explorer:        https://chainscan-galileo.0g.ai/tx/0x<txHash>',
+          'explorer:        https://chainscan.0g.ai/tx/0x<txHash>',
         ].join('\n')}
       />
       <Callout tone="warn" title="The on-chain registration is never rolled back">
@@ -427,10 +446,10 @@ export default function Page() {
         label="stderr (payment metadata) — the response body arrives on stdout"
         code={[
           'service:  #5 RWA FX & Gold Oracle',
-          'url:      https://0g-gateway.mdloglabs.org/svc/5',
+          'url:      https://0g-gateway.equiflow.xyz/svc/5',
           'paid:     0.5 OG',
           'payment:  0x<txHash>',
-          'explorer: https://chainscan-galileo.0g.ai/tx/0x<txHash>',
+          'explorer: https://chainscan.0g.ai/tx/0x<txHash>',
           'settled:  ok  (payer 0x…)',
           'status:   200',
         ].join('\n')}
@@ -519,7 +538,7 @@ export default function Page() {
           'service:       #2 Sentiment Feed',
           'active:        no (paused)',
           'setActive tx:  0x<txHash>',
-          'explorer:      https://chainscan-galileo.0g.ai/tx/0x<txHash>',
+          'explorer:      https://chainscan.0g.ai/tx/0x<txHash>',
         ].join('\n')}
       />
       <P>
@@ -553,7 +572,7 @@ export default function Page() {
           'service:       #2 Sentiment Feed',
           'active:        yes',
           'setActive tx:  0x<txHash>',
-          'explorer:      https://chainscan-galileo.0g.ai/tx/0x<txHash>',
+          'explorer:      https://chainscan.0g.ai/tx/0x<txHash>',
         ].join('\n')}
       />
 
@@ -598,7 +617,7 @@ export default function Page() {
       <CommandBlock text="npx agentgate-0g@latest mcp [--key <0xhex>]" />
       <P>
         Four tools are registered. The three read tools need no key and — because the published
-        CLI defaults to live 0G Galileo — work with zero configuration; only <M>agentgate_buy</M>{' '}
+        CLI defaults to live 0G Mainnet — work with zero configuration; only <M>agentgate_buy</M>{' '}
         spends OG and needs a buyer signer.
       </P>
       <DocTable
@@ -622,7 +641,7 @@ export default function Page() {
           [
             <M key="t4">agentgate_buy</M>,
             <M key="a4">id (+ maxOg, method, body)</M>,
-            'Pay the service’s 402 invoice by calling PaymentRouter.pay(serviceId, nonce, payTo) on 0G Galileo, then return the response body. Spends real OG from the buyer key, capped by maxOg; refuses unknown/paused services and over-cap invoices before any payment.',
+            'Pay the service’s 402 invoice by calling PaymentRouter.pay(serviceId, nonce, payTo) on the selected 0G network (mainnet by default), then return the response body. Spends real OG from the buyer key, capped by maxOg; refuses unknown/paused services and over-cap invoices before any payment.',
           ],
         ]}
       />
@@ -636,7 +655,7 @@ export default function Page() {
       <H3 id="mcp-claude-desktop">Claude Desktop</H3>
       <P>
         Wire it into <M>claude_desktop_config.json</M>. No <M>env</M> block is needed — the CLI
-        already defaults to live 0G Galileo and the deployed registry:
+        already defaults to live 0G Mainnet and the deployed registry:
       </P>
       <CodeBlock
         label="claude_desktop_config.json"
@@ -659,12 +678,13 @@ export default function Page() {
         head={['Code', 'Status', 'Command(s)', 'Cause']}
         rows={[
           [<M key="c0">CONFIG_INVALID</M>, '500', 'all commands', 'A config value failed validation before the command ran — e.g. --mode is neither mock nor live, or a port/URL env var is malformed.'],
-          [<M key="c15">INVALID_AMOUNT</M>, '400', 'wrap', '--price is not a plain decimal (non-numeric, negative, exponent, or more than 9 decimal places).'],
+          [<M key="c15">INVALID_AMOUNT</M>, '400', 'wrap', '--price is not a plain decimal (non-numeric, negative, exponent, or more than 18 decimal places).'],
           [<M key="c1">INVALID_PRICE</M>, '400', 'wrap', 'Price is not greater than 0 OG.'],
           [<M key="c2">INVALID_INPUT</M>, '400', 'wrap / buy', 'wrap: empty/blank name, or text with control characters or over the length limit. buy: --body is not valid JSON.'],
           [<M key="c3">INVALID_URL</M>, '400', 'wrap', 'upstreamUrl or gateway is not a valid http(s) URL; gateway additionally must not carry a query string or fragment (upstreamUrl may).'],
           [<M key="c4">INSECURE_URL</M>, '400', 'wrap', 'Live mode + non-localhost gateway over http:// (the signed mapping request must not travel in cleartext).'],
           [<M key="c5">INVALID_ADDRESS</M>, '400', 'wrap', '--payment-target or --attestor is not a 0x-prefixed EVM address.'],
+          [<M key="c6">GATEWAY_NETWORK_MISMATCH</M>, '400', 'wrap', 'The gateway\u2019s /healthz reports a different network than the one this registration would be written to (e.g. ZG_NETWORK_PROFILE=galileo against the mainnet gateway). Refused BEFORE the on-chain write, which could not be undone; pass --gateway for a gateway on that network, or change the profile.'],
           [<M key="c7">SIGNER_MISSING</M>, '400', 'wrap / buy / pause / resume', 'Seller commands: missing MOCK_SELLER_ACCOUNT (mock) or SELLER_SIGNER_KEY / --key (live). buy: missing MOCK_BUYER_ACCOUNT (mock) or --key / BUYER_SIGNER_KEY (live). The message names the flag and the env var, never a key value.'],
           [<M key="c8">INVALID_SERVICE_ID</M>, '400', 'buy / status / pause / resume', 'Service id is not a positive integer.'],
           [<M key="c9">SERVICE_NOT_FOUND</M>, '404', 'buy / status / pause / resume', 'No on-chain record for that id.'],

@@ -10,7 +10,7 @@ Pair with [`VIDEO_SCRIPT.md`](./VIDEO_SCRIPT.md) — that is the shot list, this
 
 ## 0. Use the right hostname
 
-> ### The 0G dashboard is `agentgate-0g.mdloglabs.org`.
+> ### The 0G dashboard is `agentgate.equiflow.xyz`.
 >
 > `agentgate.mdloglabs.org` (no `0g-`) is the **older Casper dashboard**, still
 > running alongside: `/api/services` there reports `network: casper-test` with
@@ -25,11 +25,11 @@ they serve the same build from the same registry.
 ## 1. Machine state — check before every take
 
 This machine runs the **live production gateway on port 4021** (cloudflared tunnels
-`0g-gateway.mdloglabs.org` → `localhost:4021`).
+`0g-gateway.equiflow.xyz` → `localhost:4021`).
 
 ```bash
 # Confirm the live gateway is up — this is what judges hit
-curl -sS https://0g-gateway.mdloglabs.org/healthz
+curl -sS https://0g-gateway.equiflow.xyz/healthz
 # expect: {"ok":true,"network":"0g-galileo","attestor":"0x71a89a7e...87bae"}
 ```
 
@@ -73,8 +73,8 @@ npm run build                      # ~13 s, verified clean
 PORT=$(python3 -c "import socket;s=socket.socket();s.bind(('127.0.0.1',0));print(s.getsockname()[1]);s.close()")
 echo "dashboard → http://localhost:$PORT"
 AGENTGATE_MODE=live \
-REGISTRY_CONTRACT_ADDRESS=0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1 \
-PAYMENT_ROUTER_ADDRESS=0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F \
+REGISTRY_CONTRACT_ADDRESS=0xDB3C29a09FdDe79828208603B743E769E9f6dBEe \
+PAYMENT_ROUTER_ADDRESS=0xCC3bbd10eBA7aa24F4F722E00e714e1413182c34 \
 ZG_RPC_URL=https://evmrpc-testnet.0g.ai \
 npm start -w dashboard -- -p $PORT
 ```
@@ -165,7 +165,7 @@ Say "mock chain" out loud if you use it — do not let it read as on-chain.
 | Shot | Command | Cold | Warm | Risk |
 |---|---|---|---|---|
 | Catalog, zero setup | `npx agentgate-0g@latest list` | ~30 s | **3.1 s** | pre-warm npx (§2) |
-| Live 402 | `curl -i https://0g-gateway.mdloglabs.org/svc/1` | — | **<1 s** | none |
+| Live 402 | `curl -i https://0g-gateway.equiflow.xyz/svc/1` | — | **<1 s** | none |
 | Gateway health | `curl .../healthz` | — | **<1 s** | none |
 | Offline full loop | `npm run demo` | — | **0.67 s** | ports (§1) |
 | Dashboard first paint | `npm start -w dashboard` | 13 s build | **1.6 s** | port + prod build (§3) |

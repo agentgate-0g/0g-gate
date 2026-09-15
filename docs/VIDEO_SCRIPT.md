@@ -55,10 +55,10 @@ npx agentgate-0g@latest list
 Verbatim output — **3.1 s** with npx pre-warmed:
 ```
 ID  NAME                PRICE     TIER  SCORE  ACTIVE  ENDPOINT
-1   USD FX Feed         0.001 OG  new   1/1    no      https://0g-gateway.mdloglabs.org/svc/1
-2   Crypto Spot Prices  0.001 OG  new   1/1    no      https://0g-gateway.mdloglabs.org/svc/2
-3   USD FX Feed         0.001 OG  new   1/1    yes     https://0g-gateway.mdloglabs.org/svc/3
-4   Crypto Spot Prices  0.001 OG  new   1/1    yes     https://0g-gateway.mdloglabs.org/svc/4
+1   USD FX Feed         0.001 OG  new   1/1    no      https://0g-gateway.equiflow.xyz/svc/1
+2   Crypto Spot Prices  0.001 OG  new   1/1    no      https://0g-gateway.equiflow.xyz/svc/2
+3   USD FX Feed         0.001 OG  new   1/1    yes     https://0g-gateway.equiflow.xyz/svc/3
+4   Crypto Spot Prices  0.001 OG  new   1/1    yes     https://0g-gateway.equiflow.xyz/svc/4
 ```
 
 **🎙️ VO (EN)**
@@ -80,7 +80,7 @@ ID  NAME                PRICE     TIER  SCORE  ACTIVE  ENDPOINT
 
 **⌨️ TERMINAL**
 ```bash
-curl -i https://0g-gateway.mdloglabs.org/svc/1
+curl -i https://0g-gateway.equiflow.xyz/svc/1
 ```
 
 Verbatim body (<1 s):
@@ -88,7 +88,7 @@ Verbatim body (<1 s):
 {"x402Version":1,"error":"X-PAYMENT header is required","accepts":[{"scheme":"exact-settled",
 "network":"0g-galileo","maxAmountRequired":"1000000000000000","asset":"OG",
 "payTo":"0x71a89a7e692dac4d6bd7c3f1cca9155592d87bae",
-"resource":"https://0g-gateway.mdloglabs.org/svc/1","description":"USD FX Feed",
+"resource":"https://0g-gateway.equiflow.xyz/svc/1","description":"USD FX Feed",
 "maxTimeoutSeconds":300,"extra":{"nonce":"7973784281089211","serviceId":1,
 "settlement":"0g-payment-router","router":"0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F"}}]}
 ```
@@ -203,10 +203,10 @@ Then the tool call result (verified, **8.0 s** — trim the `sleep` in the edit,
 ```json
 [ { "id": 3, "name": "USD FX Feed", "price": "0.001 OG", "tier": "new",
     "score": "1/1", "active": true,
-    "endpoint": "https://0g-gateway.mdloglabs.org/svc/3" },
+    "endpoint": "https://0g-gateway.equiflow.xyz/svc/3" },
   { "id": 4, "name": "Crypto Spot Prices", "price": "0.001 OG", "tier": "new",
     "score": "1/1", "active": true,
-    "endpoint": "https://0g-gateway.mdloglabs.org/svc/4" } ]
+    "endpoint": "https://0g-gateway.equiflow.xyz/svc/4" } ]
 ```
 
 **🎙️ VO (EN)**

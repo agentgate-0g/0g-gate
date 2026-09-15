@@ -146,7 +146,8 @@ export default function ArchitecturePage() {
               not yet wired into the runtime.
             </>,
             <>
-              0G Galileo Testnet; read/written by <M>Live0gClient</M>
+              0G Mainnet (default) or 0G Galileo Testnet, selected by <M>ZG_NETWORK_PROFILE</M>;
+              read/written by <M>Live0gClient</M>
             </>,
           ],
         ]}
@@ -176,7 +177,7 @@ export default function ArchitecturePage() {
             <M key="n">network</M>,
             <M key="m">&apos;mock&apos;</M>,
             <>
-              configured network name (e.g. <M>0g-galileo</M>)
+              configured network name (<M>0g-mainnet</M> or <M>0g-galileo</M>)
             </>,
           ],
           [
@@ -232,8 +233,8 @@ export default function ArchitecturePage() {
         ]}
       />
       <Callout tone="ok" title="CONTRACTS ARE DEPLOYED">
-        The three Solidity contracts are live on 0G Galileo and the CLI and gateway default to
-        them — <M>{DEFAULT_REGISTRY_ADDRESS}</M> (registry) and{' '}
+        The three Solidity contracts are live on 0G Mainnet (and Galileo) and the CLI and gateway default to
+        the mainnet set — <M>{DEFAULT_REGISTRY_ADDRESS}</M> (registry) and{' '}
         <M>{DEFAULT_PAYMENT_ROUTER_ADDRESS}</M> (router). Override{' '}
         <M>REGISTRY_CONTRACT_ADDRESS</M> and <M>PAYMENT_ROUTER_ADDRESS</M> only to point at your
         own deployment; <M>CONTRACT_NOT_DEPLOYED</M> (HTTP 503) is thrown from every
@@ -387,8 +388,9 @@ export default function ArchitecturePage() {
         devnet alongside the gateway (a standalone gateway points at one via <M>DEVNET_URL</M>,
         default <M>http://localhost:4030</M>), it accepts the default admin token, and leaves the
         SSRF guard off so localhost demos work. <M>live</M>{' '}
-        targets 0G Galileo Testnet through viem and the public RPC, refuses the default admin
-        token, turns the SSRF guard on, and requires real signing keys.
+        targets 0G through viem and the public RPC — Mainnet by default, Galileo under{' '}
+        <M>ZG_NETWORK_PROFILE=galileo</M> — refuses the default admin token, turns the SSRF guard
+        on, and requires real signing keys.
       </P>
       <Callout tone="info" title="ONE SEAM, NO LEAKAGE">
         Because the difference is isolated to <M>packages/chain</M>, you develop and test the entire
@@ -440,7 +442,7 @@ export default function ArchitecturePage() {
           ],
           [
             'Chain',
-            '0G Galileo Testnet',
+            '0G Mainnet · 0G Galileo Testnet',
             <>
               Live reads and writes through viem against the public RPC — no indexer and no API key
               anywhere in the path.

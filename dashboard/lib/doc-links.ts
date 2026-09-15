@@ -119,12 +119,12 @@ export const DOC_GROUPS: DocGroup[] = [
       {
         href: '/docs/configuration',
         label: 'Configuration',
-        keywords: ['env', 'AGENTGATE_MODE', 'ZG_RPC_URL', 'ZG_CHAIN_ID', 'REGISTRY_CONTRACT_ADDRESS', 'PAYMENT_ROUTER_ADDRESS', 'SPEND_GUARD_ADDRESS', 'SELLER_SIGNER_KEY', 'GATE_SIGNER_KEY', 'ACTIVITY_LOOKBACK_BLOCKS', 'INVOICE_TTL_MS', 'INVOICE_STORE_PATH', 'ANTHROPIC_API_KEY', 'TRUST_PROXY', 'ports', 'variables'],
+        keywords: ['env', 'AGENTGATE_MODE', 'ZG_NETWORK_PROFILE', 'mainnet', 'galileo', 'ZG_RPC_URL', 'ZG_CHAIN_ID', 'REGISTRY_CONTRACT_ADDRESS', 'PAYMENT_ROUTER_ADDRESS', 'SPEND_GUARD_ADDRESS', 'CONTRACTS_DEPLOY_BLOCK', 'SELLER_SIGNER_KEY', 'GATE_SIGNER_KEY', 'ACTIVITY_LOOKBACK_BLOCKS', 'INVOICE_TTL_MS', 'INVOICE_STORE_PATH', 'ANTHROPIC_API_KEY', 'TRUST_PROXY', 'ports', 'variables'],
       },
       {
         href: '/docs/contract',
         label: 'Smart contracts',
-        keywords: ['solidity', 'abi', 'entry points', 'registerService', 'recordAttestation', 'setActive', 'setAttestor', 'PaymentRouter', 'SpendGuard', 'events', 'trust score', 'storage', 'contract address', 'foundry', 'testnet'],
+        keywords: ['solidity', 'abi', 'entry points', 'registerService', 'recordAttestation', 'setActive', 'setAttestor', 'PaymentRouter', 'SpendGuard', 'events', 'trust score', 'storage', 'contract address', 'foundry', 'mainnet', 'testnet', 'galileo'],
       },
       {
         href: '/docs/errors',

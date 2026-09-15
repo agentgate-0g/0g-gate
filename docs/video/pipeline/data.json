@@ -1,10 +1,10 @@
 {
  "list": [
   "ID  NAME                PRICE     TIER  SCORE  ACTIVE  ENDPOINT",
-  "1   USD FX Feed         0.001 OG  new   1/1    no      https://0g-gateway.mdloglabs.org/svc/1",
-  "2   Crypto Spot Prices  0.001 OG  new   1/1    no      https://0g-gateway.mdloglabs.org/svc/2",
-  "3   USD FX Feed         0.001 OG  new   1/1    yes     https://0g-gateway.mdloglabs.org/svc/3",
-  "4   Crypto Spot Prices  0.001 OG  new   1/1    yes     https://0g-gateway.mdloglabs.org/svc/4"
+  "1   USD FX Feed         0.001 OG  new   1/1    no      https://0g-gateway.equiflow.xyz/svc/1",
+  "2   Crypto Spot Prices  0.001 OG  new   1/1    no      https://0g-gateway.equiflow.xyz/svc/2",
+  "3   USD FX Feed         0.001 OG  new   1/1    yes     https://0g-gateway.equiflow.xyz/svc/3",
+  "4   Crypto Spot Prices  0.001 OG  new   1/1    yes     https://0g-gateway.equiflow.xyz/svc/4"
  ],
  "hdr402": [
   "HTTP/2 402",
@@ -21,7 +21,7 @@
   "      \"maxAmountRequired\": \"1000000000000000\",",
   "      \"asset\": \"OG\",",
   "      \"payTo\": \"0xb5b4a886da386830392a86288ed91d272de17746\",",
-  "      \"resource\": \"https://0g-gateway.mdloglabs.org/svc/3\",",
+  "      \"resource\": \"https://0g-gateway.equiflow.xyz/svc/3\",",
   "      \"extra\": {",
   "        \"nonce\": \"3340912103781664\",",
   "        \"serviceId\": 3,",
@@ -88,7 +88,7 @@
   "    \"tier\": \"new\",",
   "    \"score\": \"1/1\",",
   "    \"active\": true,",
-  "    \"endpoint\": \"https://0g-gateway.mdloglabs.org/svc/3\"",
+  "    \"endpoint\": \"https://0g-gateway.equiflow.xyz/svc/3\"",
   "  },",
   "  {",
   "    \"id\": 4,",
@@ -98,7 +98,7 @@
   "    \"tier\": \"new\",",
   "    \"score\": \"1/1\",",
   "    \"active\": true,",
-  "    \"endpoint\": \"https://0g-gateway.mdloglabs.org/svc/4\"",
+  "    \"endpoint\": \"https://0g-gateway.equiflow.xyz/svc/4\"",
   "  }",
   "]"
  ],

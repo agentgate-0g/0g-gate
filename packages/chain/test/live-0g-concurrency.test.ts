@@ -83,7 +83,7 @@ function configFor(registry: string, rpcUrl = proxyUrl): AgentGateConfig {
   return {
     zgRpcUrl: rpcUrl, zgChainId: 31337, zgNetwork: '0g-galileo',
     registryContractAddress: registry, paymentRouterAddress: routerAddress,
-    activityLookbackBlocks: 50_000,
+    contractsDeployBlock: 0, activityLookbackBlocks: null,
   } as unknown as AgentGateConfig;
 }
 

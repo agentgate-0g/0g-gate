@@ -1,7 +1,7 @@
 # Hosting the live AgentGate gateway
 
 The CLI's live `wrap` defaults `--gateway` to `DEFAULT_GATEWAY_URL`
-(`https://0g-gateway.mdloglabs.org`, in `packages/shared/src/config.ts`). For the
+(`https://0g-gateway.equiflow.xyz`, in `packages/shared/src/config.ts`). For the
 one-line `npx agentgate-0g wrap …` to complete its upstream
 mapping, a **live-mode middleware** must be reachable at that URL. Reads
 (`list`/`status`) never touch the gateway, so they work regardless.
@@ -43,7 +43,7 @@ docker run -d --name agentgate-gateway -p 4021:4021 \
 ```
 
 Then put a TLS-terminating reverse proxy / tunnel in front and point the DNS for
-`0g-gateway.mdloglabs.org` at it. Health check: `GET /healthz` → `{ ok, network }`;
+`0g-gateway.equiflow.xyz` at it. Health check: `GET /healthz` → `{ ok, network }`;
 readiness (chain reachable): `GET /readyz`.
 
 ## Verify
@@ -53,7 +53,7 @@ readiness (chain reachable): `GET /readyz`.
 export SELLER_SIGNER_KEY=0x…
 npx agentgate-0g wrap https://api.example.com/gold --price 2.5 --name "My API"
 # → prints service id + public endpoint; the gateway logs `self_mapped`.
-curl https://0g-gateway.mdloglabs.org/svc/<id>        # → 402 payment challenge
+curl https://0g-gateway.equiflow.xyz/svc/<id>        # → 402 payment challenge
 ```
 
 If the gateway is unreachable when you `wrap`, the on-chain registration still
@@ -115,11 +115,32 @@ uses **PM2** (its daemon already runs), so the gateway + dashboard are defined i
 `deploy/agentgate.ecosystem.config.cjs` and started with:
 
 ```bash
-pm2 start deploy/agentgate.ecosystem.config.cjs   # agentgate-0g-gateway + agentgate-0g-dashboard
+pm2 start deploy/agentgate.ecosystem.config.cjs   # four apps: gateway + dashboard, each for mainnet and for galileo
 pm2 save                                           # persist across reboot (pm2 startup is configured)
 pm2 status ; pm2 logs agentgate-0g-gateway
-curl -s http://127.0.0.1:16021/healthz              # {"ok":true,"network":"0g-galileo"}
+curl -s http://127.0.0.1:16021/healthz              # mainnet gateway  — 0g-gateway.equiflow.xyz
+curl -s http://127.0.0.1:16022/healthz              # galileo gateway  — 0g-gateway.mdloglabs.org
+curl -s http://127.0.0.1:13000/api/network          # mainnet dashboard — agentgate.equiflow.xyz
+curl -s http://127.0.0.1:13001/api/network          # galileo dashboard — no hostname
 ```
+
+Since 2026-09-15 the public hosts serve **0G Mainnet**; Galileo runs beside it
+under `ZG_NETWORK_PROFILE=galileo` (`agentgate-0g-gateway-galileo`,
+`agentgate-0g-dashboard-galileo`). The dashboard is built once
+(`npm run build -w dashboard`) and started twice: the network is resolved from
+the environment on every request, so the two dashboard apps differ only by the
+profile. Each gateway keeps its own invoice, attestation and upstream files
+(`data/gateway-mainnet-*.json` vs the original Galileo paths) — service ids
+start at 1 on every chain, so they must never share one.
+
+**Rebuild, then restart — never the reverse.** `next start` holds the build's
+chunk manifest in memory; rebuilding `.next` under a running server leaves it
+serving HTML that references chunks the rebuild replaced, and every client-side
+navigation then trips the error boundary ("This page failed to render").
+`npm run build -w dashboard && pm2 restart agentgate-0g-dashboard agentgate-0g-dashboard-galileo`.
+
+The tunnel's hostname → port mapping is managed in Cloudflare, not in this
+repo. The ports above are what it points at today; change them only together.
 
 Two names and one port in there are not interchangeable:
 
@@ -152,7 +173,7 @@ systemctl --user enable --now agentgate-gateway
 **2. Set `TRUST_PROXY=1` in `.env`** (behind exactly one Cloudflare hop) so the
 rate limiter keys off the real client IP, then restart the unit.
 
-**3. Expose `0g-gateway.mdloglabs.org` → `http://localhost:<MIDDLEWARE_PORT>`**
+**3. Expose `0g-gateway.equiflow.xyz` → `http://localhost:<MIDDLEWARE_PORT>`**
 (`16021` on this box, per the `.env` above — not `4021`; a tunnel pointed at
 `4021` here lands on nothing, or worse on whatever else claimed that port) —
 pick one:
@@ -170,12 +191,12 @@ pick one:
 
   ```bash
   cloudflared tunnel create agentgate-gateway
-  cloudflared tunnel route dns agentgate-gateway 0g-gateway.mdloglabs.org
+  cloudflared tunnel route dns agentgate-gateway 0g-gateway.equiflow.xyz
   # ~/.cloudflared/agentgate-gateway.yml:
   #   tunnel: <UUID printed by create>
   #   credentials-file: /home/mdlog/.cloudflared/<UUID>.json
   #   ingress:
-  #     - hostname: 0g-gateway.mdloglabs.org
+  #     - hostname: 0g-gateway.equiflow.xyz
   #       service: http://localhost:16021        # = MIDDLEWARE_PORT in the root .env
   #     - service: http_status:404
   cloudflared tunnel --config ~/.cloudflared/agentgate-gateway.yml run agentgate-gateway
@@ -184,11 +205,11 @@ pick one:
 **4. Verify publicly:**
 
 ```bash
-curl -s https://0g-gateway.mdloglabs.org/healthz     # {"ok":true,"network":"0g-galileo"}
+curl -s https://0g-gateway.equiflow.xyz/healthz     # {"ok":true,"network":"0g-galileo"}
 # from any box with a funded wallet key:
 export SELLER_SIGNER_KEY=0x…
 npx agentgate-0g wrap https://open.er-api.com/v6/latest/USD --price 0.001 --name "USD FX"
-curl -i https://0g-gateway.mdloglabs.org/svc/<id>     # 402 challenge
+curl -i https://0g-gateway.equiflow.xyz/svc/<id>     # 402 challenge
 ```
 
 Note: a public gateway spends the gate key's OG on an on-chain attestation per

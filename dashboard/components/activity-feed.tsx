@@ -11,6 +11,7 @@ import type { ActivityResponse } from '@/lib/api-types';
 import { TxHash } from '@/components/tx-hash';
 import { ChainDownBanner, EmptyState, ErrorState, Skeleton } from '@/components/states';
 import { LiveDot } from '@/components/live-dot';
+import { useNetwork } from '@/components/network-context';
 
 type Kind = ActivityEvent['kind'];
 
@@ -233,6 +234,7 @@ function FeedSkeleton() {
 
 /** /activity ledger — polls /api/activity (server-cached ~30 s). */
 export function ActivityFeed() {
+  const { explorerUrl } = useNetwork();
   const [filter, setFilter] = useState<Kind | 'all'>('all');
   const [page, setPage] = useState(0);
   const { data, error, isLoading } = useSWR<ActivityResponse>('/api/activity?limit=100', fetcher, {
@@ -256,7 +258,6 @@ export function ActivityFeed() {
   }
 
   const events = data.events;
-  const lookbackBlocks = data.lookbackBlocks;
   const counts: Record<Kind | 'all', number> = {
     all: events.length,
     payment: events.filter((e) => e.kind === 'payment').length,
@@ -285,20 +286,40 @@ export function ActivityFeed() {
       ) : null}
 
       {events.length === 0 ? (
-        <div className="panel px-6 py-14 text-center">
-          <p className="microlabel">nothing in this window</p>
-          <p className="mx-auto mt-3 max-w-md font-display text-lg text-white">
-            No registration, payment or attestation in the last{' '}
-            {lookbackBlocks ? formatInt(lookbackBlocks) : '—'} blocks.
-          </p>
-          <p className="mt-3 text-sm text-mut">
-            This feed reads a bounded log window, so older history scrolls out of it —
-            an empty table here does not mean the service was never used. Raise{' '}
-            <code className="font-mono text-zinc-300">ACTIVITY_LOOKBACK_BLOCKS</code> to look
-            further back, or run <code className="font-mono text-zinc-300">npm run demo</code>{' '}
-            to fire a full wrap → 402 → pay → attest loop.
-          </p>
-        </div>
+        data.lookbackBlocks === null ? (
+          // No cap: the window starts at the deploy block, so this is the whole
+          // history and the deployment really has not been used yet.
+          <div className="panel px-6 py-14 text-center">
+            <p className="microlabel">nothing since deployment</p>
+            <p className="mx-auto mt-3 max-w-md font-display text-lg text-white">
+              No registration, payment or attestation since the contracts went live at block{' '}
+              {formatInt(data.historyFromBlock)}.
+            </p>
+            <p className="mt-3 text-sm text-mut">
+              This feed reads every log the contracts have emitted since they were deployed, so
+              nothing has scrolled out of it. Run{' '}
+              <code className="font-mono text-zinc-300">npm run demo</code> to fire a full wrap →
+              402 → pay → attest loop.
+            </p>
+          </div>
+        ) : (
+          // Capped: the operator bounded the window, so older history is invisible
+          // here and an empty table says nothing about whether the service was used.
+          <div className="panel px-6 py-14 text-center">
+            <p className="microlabel">nothing in this window</p>
+            <p className="mx-auto mt-3 max-w-md font-display text-lg text-white">
+              No registration, payment or attestation in the last{' '}
+              {formatInt(data.lookbackBlocks)} blocks.
+            </p>
+            <p className="mt-3 text-sm text-mut">
+              <code className="font-mono text-zinc-300">ACTIVITY_LOOKBACK_BLOCKS</code> caps this
+              feed to a bounded log window, so older history scrolls out of it — an empty table
+              here does not mean the service was never used. Unset the cap to read back to the
+              deploy block, or run <code className="font-mono text-zinc-300">npm run demo</code>{' '}
+              to fire a full wrap → 402 → pay → attest loop.
+            </p>
+          </div>
+        )
       ) : (
         <>
           <Summary events={events} />
@@ -361,7 +382,10 @@ export function ActivityFeed() {
             of {formatInt(rows.length)}
             {filter === 'all' ? '' : ` ${filterLabel}`} event{rows.length === 1 ? '' : 's'}
             {events.length >= 100 ? ' (latest 100)' : ''}. Times are relative; hover for the exact
-            timestamp. Every row links to its transaction on chainscan-galileo.0g.ai.
+            timestamp.
+            {explorerUrl
+              ? ` Every row links to its transaction on ${explorerUrl.replace(/^https?:\/\//, '')}.`
+              : ''}
           </p>
         </>
       )}

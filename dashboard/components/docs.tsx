@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { CopyButton } from './copy';
-import { DOCS_VERSION, REGISTRY_ADDRESS_SHORT } from '@/lib/version';
+import { DOCS_VERSION } from '@/lib/version';
+import { getNetworkInfo } from '@/lib/server/chain';
 
 /* Server-side building blocks for the /docs section. The only interactive piece
    is the client CopyButton (from copy.tsx) embedded in CodeBlock and StepFlow;
@@ -17,6 +18,11 @@ export function DocHeader({
   title: ReactNode;
   lede: ReactNode;
 }) {
+  // The registry and network badges describe THIS instance (server-resolved,
+  // per request), not the CLI's compiled-in default — on the mainnet instance
+  // the docs must name the mainnet registry.
+  const { network, registry } = getNetworkInfo();
+  const registryShort = registry === '' ? 'not deployed' : `${registry.slice(0, 10)}…${registry.slice(-6)}`;
   return (
     <header>
       <p className="microlabel text-accent">{kicker}</p>
@@ -27,8 +33,8 @@ export function DocHeader({
       <div className="mt-4 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-400">
         <span className="border border-line px-2 py-0.5">CLI v{DOCS_VERSION.cli}</span>
         <span className="border border-line px-2 py-0.5">SDK v{DOCS_VERSION.sdk}</span>
-        <span className="border border-line px-2 py-0.5">registry {REGISTRY_ADDRESS_SHORT}</span>
-        <span className="border border-line px-2 py-0.5">{DOCS_VERSION.network}</span>
+        <span className="border border-line px-2 py-0.5">registry {registryShort}</span>
+        <span className="border border-line px-2 py-0.5">{network}</span>
       </div>
     </header>
   );

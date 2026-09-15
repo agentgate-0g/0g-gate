@@ -42,7 +42,7 @@ node -e "import('agentgate-0g').then(async m=>{
 npx agentgate-0g@latest list
 
 # gateway: a real 402, not a placeholder
-curl -sS -o /dev/null -w '%{http_code}\n' https://0g-gateway.mdloglabs.org/svc/1
+curl -sS -o /dev/null -w '%{http_code}\n' https://0g-gateway.equiflow.xyz/svc/1
 
 # repo: CI state on the tip of main
 curl -sS "https://api.github.com/repos/agentgate-0g/0g-gate/actions/runs?per_page=1" \

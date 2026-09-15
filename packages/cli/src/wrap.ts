@@ -156,10 +156,25 @@ export async function wrapService(opts: WrapServiceOpts): Promise<WrapServiceRes
   // network call, the same as every other bad input here.
   const explicitAttestor =
     opts.attestor !== undefined ? requireAddress(opts.attestor, 'attestor') : undefined;
-  const gatewayAttestor = await fetchGatewayAttestor(
-    gatewayBase,
-    opts.fetchImpl ?? ((u, i) => fetch(u, i)),
-  );
+  const probe = await probeGateway(gatewayBase, opts.fetchImpl ?? ((u, i) => fetch(u, i)));
+  // The gateway serves ONE chain and says which on /healthz. Registering on
+  // another is the one mistake here that cannot be walked back: the write
+  // lands and costs gas, then the mapping 404s because that gateway's registry
+  // has no such service. It became easy to make the day the default profile
+  // moved to mainnet — `ZG_NETWORK_PROFILE=galileo` without `--gateway` still
+  // maps on the mainnet gateway — so it is refused before the write. A gateway
+  // that does not say (an older build, or unreachable) is not a mismatch.
+  const chainNetwork = opts.network ?? opts.chain.network;
+  if (probe.network !== '' && probe.network !== chainNetwork) {
+    throw new AgentGateError(
+      'GATEWAY_NETWORK_MISMATCH',
+      `gateway ${gatewayBase} serves ${probe.network}, but this registration would be ` +
+        `written to ${chainNetwork}. Nothing was registered. Pass --gateway for a gateway ` +
+        `on ${chainNetwork}, or select the gateway's network with ZG_NETWORK_PROFILE.`,
+      400,
+    );
+  }
+  const gatewayAttestor = probe.attestor;
   let attestor: string;
   if (explicitAttestor !== undefined) {
     attestor = explicitAttestor;
@@ -265,32 +280,47 @@ export async function wrapService(opts: WrapServiceOpts): Promise<WrapServiceRes
   return { serviceId, txHash, publicUrl, dashboardUrl, adminOk: false, adminWarning };
 }
 
+/** What a gateway's /healthz says about itself; '' for anything it does not say. */
+export interface GatewayProbe {
+  /** The address it records attestations as. */
+  attestor: string;
+  /** The chain it serves, e.g. `0g-mainnet` — what its 402s and self-map challenges carry. */
+  network: string;
+}
+
+const NO_PROBE: GatewayProbe = { attestor: '', network: '' };
+
 /**
- * Ask a gateway which address it signs attestations as.
+ * Ask a gateway which address it signs attestations as, and which chain it
+ * serves.
  *
- * Returns '' when the gateway does not say — an older gateway, an unreachable
- * one, or mock mode. Deliberately non-fatal: this runs before an on-chain
- * registration that costs gas, and a health probe failing is not a reason to
- * refuse to register. The caller warns instead.
+ * Either field is '' when the gateway does not say — an older gateway, an
+ * unreachable one, or mock mode. Deliberately non-fatal: this runs before an
+ * on-chain registration that costs gas, and a health probe failing is not a
+ * reason to refuse to register. The caller warns (attestor) or refuses
+ * (network) only on a positive answer.
  */
-export async function fetchGatewayAttestor(
+export async function probeGateway(
   gatewayBase: string,
   fetchImpl: FetchLike,
   timeoutMs = 5_000,
-): Promise<string> {
+): Promise<GatewayProbe> {
   try {
     const res = await fetchImpl(`${gatewayBase}/healthz`, {
       signal: AbortSignal.timeout(timeoutMs),
     });
-    if (!res.ok) return '';
-    const body = (await res.json()) as { attestor?: unknown };
+    if (!res.ok) return NO_PROBE;
+    const body = (await res.json()) as { attestor?: unknown; network?: unknown };
     // Normalised: isAddress() accepts surrounding whitespace and any casing,
     // but this value is compared against on-chain records and written into a
     // registration, both of which use the canonical lowercase form.
-    return typeof body.attestor === 'string' && isAddress(body.attestor)
-      ? normalizeAddress(body.attestor)
-      : '';
+    const attestor =
+      typeof body.attestor === 'string' && isAddress(body.attestor)
+        ? normalizeAddress(body.attestor)
+        : '';
+    const network = typeof body.network === 'string' ? body.network.trim() : '';
+    return { attestor, network };
   } catch {
-    return '';
+    return NO_PROBE;
   }
 }

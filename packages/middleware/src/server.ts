@@ -68,12 +68,17 @@ export async function startServer(opts: MiddlewareStartOpts = {}): Promise<Runni
   const invoiceStorePath = opts.invoiceStorePath ?? process.env.INVOICE_STORE_PATH;
   // Persist pending attestations across restarts when a path is configured (F7).
   const attestationQueuePath = opts.attestationQueuePath ?? process.env.ATTESTATION_QUEUE_PATH;
+  // The upstream map is keyed by SERVICE ID, and ids start at 1 on every
+  // network. Two gateways on one box — one per chain — must therefore never
+  // share the default file, or mainnet service #1 proxies whatever Galileo
+  // service #1 was mapped to. Configurable the same way as the two stores above.
+  const upstreamsFile = opts.upstreamsFile ?? process.env.UPSTREAMS_PATH;
 
   const app = createApp({
     config,
     chain,
     logger,
-    ...(opts.upstreamsFile !== undefined ? { upstreamsFile: opts.upstreamsFile } : {}),
+    ...(upstreamsFile !== undefined ? { upstreamsFile } : {}),
     ...(opts.invoiceStore !== undefined ? { invoiceStore: opts.invoiceStore } : {}),
     ...(invoiceStorePath !== undefined ? { invoiceStorePath } : {}),
     ...(attestationQueuePath !== undefined ? { attestationQueuePath } : {}),

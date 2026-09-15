@@ -3,8 +3,7 @@ import {
   keccak256,
   BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient,
   defineChain, http, parseEventLogs, TransactionReceiptNotFoundError,
-  WaitForTransactionReceiptTimeoutError,
-  type Chain, type Hash, type PublicClient, type TransactionReceipt,
+  type Abi, type Chain, type Hash, type PublicClient, type TransactionReceipt,
   type Transport, type WalletClient,
 } from 'viem';
 import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
@@ -16,7 +15,12 @@ import {
   type VerifyResult, type VerifyTransferQuery, type Wei,
 } from '@agentgate/shared';
 import { normalizeAddress, shortAddress } from './address';
+import {
+  awaitReceipt, isReceiptLag,
+  DEFAULT_RECEIPT_TIMEOUT_MS, RECEIPT_ATTEMPT_TIMEOUT_MS,
+} from './receipt';
 import { PAYMENT_ROUTER_ABI, REGISTRY_ABI } from './abi';
+import { missingSelectors } from './deployment-shape';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
@@ -109,6 +113,47 @@ function isRevertNamed(err: unknown, errorName: string): boolean {
 /** True when a read reverted because the service id is not registered. */
 function isServiceNotFound(err: unknown): boolean {
   return isRevertNamed(err, 'ServiceNotFound');
+}
+
+/**
+ * Decode failures, matched on error NAME rather than on imported classes: viem
+ * throws these from a dozen small classes across its abi and encoding modules,
+ * not all of which are re-exported from the package root, and the set grows
+ * between minor versions. A name this misses falls through to the generic
+ * handling that existed before — so the heuristic can only under-report.
+ */
+const ABI_DECODE_ERROR = /^(AbiDecoding|InvalidAbiDecoding|InvalidBytes|InvalidHex)/;
+
+/**
+ * True when a read REACHED the contract and came back with bytes the shipped ABI
+ * cannot decode.
+ *
+ * This is the signature of a deployment that has drifted from
+ * packages/chain/src/abi.ts, and it is worth separating from every other read
+ * failure because it is the one that lies. The node is healthy, the address
+ * holds code, the call returns 200 — and the operator is handed a Solidity type
+ * error about a `bool` they never asked for. Reported as "chain unreachable",
+ * which is where it used to land, it sends the investigation at an RPC that has
+ * nothing wrong with it.
+ */
+function isAbiDecodeFailure(err: unknown): boolean {
+  return (
+    err instanceof BaseError && err.walk((e) => ABI_DECODE_ERROR.test((e as Error).name)) !== null
+  );
+}
+
+/** The actionable version of a decode failure: what drifted, and what fixes it. */
+function abiMismatch(registry: string, fn: string, err: unknown): AgentGateError {
+  const detail = err instanceof BaseError ? err.shortMessage : String(err);
+  return new AgentGateError(
+    'registry_abi_mismatch',
+    `registry ${registry} answered ${fn} with data that packages/chain/src/abi.ts ` +
+      `cannot decode (${detail}). The contract at that address is not the one this ` +
+      'build was compiled against. Redeploy the current contracts and re-record them ' +
+      'with `npx tsx scripts/set-deployment.ts`, or point REGISTRY_CONTRACT_ADDRESS ' +
+      'at a deployment that matches.',
+    500,
+  );
 }
 
 /**
@@ -238,14 +283,20 @@ export class Live0gClient implements ChainClient {
     // Only check what is actually configured — a read-only client legitimately
     // runs without a router, and `router()`/`registry()` already fail closed
     // with a clearer message when one is needed but unset.
-    const wanted: [string, string][] = [];
+    const wanted: { label: string; address: string; abi: Abi; code: string }[] = [];
     if (this.cfg.registryContractAddress !== '') {
-      wanted.push(['REGISTRY_CONTRACT_ADDRESS', this.cfg.registryContractAddress]);
+      wanted.push({
+        label: 'REGISTRY_CONTRACT_ADDRESS', address: this.cfg.registryContractAddress,
+        abi: REGISTRY_ABI as unknown as Abi, code: 'registry_abi_mismatch',
+      });
     }
     if (this.cfg.paymentRouterAddress !== '') {
-      wanted.push(['PAYMENT_ROUTER_ADDRESS', this.cfg.paymentRouterAddress]);
+      wanted.push({
+        label: 'PAYMENT_ROUTER_ADDRESS', address: this.cfg.paymentRouterAddress,
+        abi: PAYMENT_ROUTER_ABI as unknown as Abi, code: 'router_abi_mismatch',
+      });
     }
-    for (const [label, address] of wanted) {
+    for (const { label, address, abi, code: mismatchCode } of wanted) {
       const code = await this.pub.getCode({ address: normalizeAddress(address) as `0x${string}` });
       if (code === undefined || code === '0x') {
         throw new AgentGateError(
@@ -253,6 +304,24 @@ export class Live0gClient implements ChainClient {
           `${label}=${address} has no code on chain ${this.cfg.zgChainId} (${this.cfg.zgNetwork}). ` +
             'This is what a testnet address left over on a mainnet config looks like. ' +
             'A payment sent to a codeless address SUCCEEDS on-chain and is unrecoverable.',
+          503,
+        );
+      }
+      // Holding code is not the same as being the contract this build was
+      // compiled against. Every selector the ABI declares must be dispatchable
+      // by what is actually there — otherwise the gateway boots, answers
+      // /healthz, and 500s every read, which is the one failure mode readiness
+      // exists to catch. The bytecode is already in hand, so this costs nothing.
+      const missing = missingSelectors(abi, code);
+      if (missing.length > 0) {
+        throw new AgentGateError(
+          mismatchCode,
+          `${label}=${address} cannot dispatch ${missing.length} function(s) that ` +
+            `packages/chain/src/abi.ts declares: ${missing.slice(0, 5).join(', ')}` +
+            `${missing.length > 5 ? ', …' : ''}. The deployment is older than this build. ` +
+            'Redeploy the current contracts and re-record them with ' +
+            '`npx tsx scripts/set-deployment.ts`, or point this address at a deployment ' +
+            'that matches.',
           503,
         );
       }
@@ -318,6 +387,7 @@ export class Live0gClient implements ChainClient {
       // through to a generic 500), so this distinction matters regardless of
       // which 5xx a given throw ends up as.
       if (isServiceNotFound(err)) return null;
+      if (isAbiDecodeFailure(err)) throw abiMismatch(this.registry(), 'getService', err);
       throw err;
     }
   }
@@ -397,19 +467,11 @@ export class Live0gClient implements ChainClient {
     // every live attestation carries an empty hash: the CLI prints a dangling
     // "tx ", the dashboard renders a link to nowhere, and — because the list is
     // keyed by it — React sees every row as the same key.
-    // cacheTime: 0 is load-bearing. viem caches getBlockNumber for its polling
-    // interval (~4s) by default, so a block mined moments ago can still be
-    // missing from the cached height — and this value is `toBlock`, so the
-    // window would silently end BELOW the event just written. The caller reads
-    // its own fresh write and gets nothing back.
-    const latest = await this.pub.getBlockNumber({ cacheTime: 0 });
-    const lookback = BigInt(this.cfg.activityLookbackBlocks);
     const logs = await this.pub.getLogs({
+      ...(await this.historyRange()),
       address: registry,
       event: ATTESTATION_RECORDED_EVENT,
       args: { serviceId: BigInt(id) },
-      fromBlock: latest > lookback ? latest - lookback : 0n,
-      toBlock: latest,
       strict: true,
     });
     const byPayment = new Map(logs.map((l) => [l.args.paymentTxHash, l.transactionHash]));
@@ -419,10 +481,44 @@ export class Live0gClient implements ChainClient {
       paymentTxHash: a.paymentTxHash,
       success: a.success,
       timestamp: Number(a.timestamp),
-      // '' only when the attestation predates the lookback window. Consumers
-      // must treat an empty hash as "unknown", never as a renderable link.
+      // '' only when the attestation predates a configured ACTIVITY_LOOKBACK_BLOCKS
+      // cap — the window otherwise reaches the deploy block, below which no
+      // attestation can exist. Consumers must treat an empty hash as
+      // "unknown", never as a renderable link.
       recordTxHash: byPayment.get(a.paymentTxHash) ?? '',
     }));
+  }
+
+  /**
+   * The `eth_getLogs` window every history read uses: from the block the
+   * contracts were deployed in, to the head.
+   *
+   * It is anchored at the DEPLOY block and not at `head - N` because a rolling
+   * window is empty exactly when the service has been quiet longer than the
+   * window — which is when an operator looks at the ledger to see what
+   * happened. A 50,000-block window (seven hours at 0G's ~0.5 s blocks) went
+   * blank in production, was widened to 1,000,000 (six days), and went blank
+   * again a week later, taking every older attestation's `recordTxHash` with
+   * it; the chain had all of it the whole time. Nothing a contract emitted can
+   * sit below its creation block, so this floor loses nothing, and both 0G
+   * RPCs (testnet and mainnet) answer a deploy-to-head query in well under a
+   * second — the same as a 10,000-block one. "Public RPCs cap getLogs ranges"
+   * was the reason the window was bounded at all, and it is not true of
+   * these. `ACTIVITY_LOOKBACK_BLOCKS` remains as an opt-in cap for an RPC
+   * where it is, and it brings the blank-feed failure back in proportion.
+   *
+   * cacheTime: 0 is load-bearing. viem caches getBlockNumber for its polling
+   * interval (~4s) by default, so a block mined moments ago can still be
+   * missing from the cached height — and this value is `toBlock`, so the
+   * window would silently end BELOW the event just written. The caller reads
+   * its own fresh write and gets nothing back.
+   */
+  private async historyRange(): Promise<{ fromBlock: bigint; toBlock: bigint }> {
+    const toBlock = await this.pub.getBlockNumber({ cacheTime: 0 });
+    const floor = BigInt(this.cfg.contractsDeployBlock);
+    const cap = this.cfg.activityLookbackBlocks;
+    const capped = cap === null ? 0n : toBlock > BigInt(cap) ? toBlock - BigInt(cap) : 0n;
+    return { fromBlock: floor > capped ? floor : capped, toBlock };
   }
 
   async getBalance(account: string): Promise<Wei> {
@@ -445,23 +541,15 @@ export class Live0gClient implements ChainClient {
    * through to insertion order, listing every attestation above every payment
    * regardless of what actually happened first.
    *
-   * The lookback is BOUNDED: public RPCs cap getLogs ranges, and `fromBlock: 0`
-   * would fail outright on a live chain.
+   * The window reaches the DEPLOY BLOCK (see `historyRange`), so the feed is
+   * the deployment's whole history — never a rolling slice of it.
    */
   async listRecentActivity(limit = 50): Promise<ActivityEvent[]> {
     // Resolved BEFORE the first RPC call, so a gateway booted without a deploy
     // answers CONTRACT_NOT_DEPLOYED immediately instead of paying a round-trip
     // to learn what its own config already knew.
     const registry = this.registry();
-    // cacheTime: 0 is load-bearing. viem caches getBlockNumber for its polling
-    // interval (~4s) by default, so a block mined moments ago can still be
-    // missing from the cached height — and this value is `toBlock`, so the
-    // window would silently end BELOW the event just written. The caller reads
-    // its own fresh write and gets nothing back.
-    const latest = await this.pub.getBlockNumber({ cacheTime: 0 });
-    const lookback = BigInt(this.cfg.activityLookbackBlocks);
-    const fromBlock = latest > lookback ? latest - lookback : 0n;
-    const range = { fromBlock, toBlock: latest, strict: true } as const;
+    const range = { ...(await this.historyRange()), strict: true } as const;
 
     const [registered, attested, paid] = await Promise.all([
       this.pub.getLogs({ ...range, address: registry, event: SERVICE_REGISTERED_EVENT }),
@@ -516,10 +604,11 @@ export class Live0gClient implements ChainClient {
       if (a.blockNumber !== b.blockNumber) return a.blockNumber < b.blockNumber ? 1 : -1;
       return b.logIndex - a.logIndex;
     });
-    // Paged BEFORE any block header is read. The window is 50 000 blocks wide,
-    // so resolving a timestamp for every event-bearing block in it — then
-    // throwing all but `limit` away — would put an unbounded, concurrent burst
-    // of getBlock calls against a public RPC behind a two-item request.
+    // Paged BEFORE any block header is read. The window is the deployment's
+    // entire history, so resolving a timestamp for every event-bearing block in
+    // it — then throwing all but `limit` away — would put an unbounded,
+    // concurrent burst of getBlock calls against a public RPC behind a two-item
+    // request.
     const page = pending.slice(0, limit);
 
     // Block timestamps are per-BLOCK, not per-log: fetch each distinct block
@@ -650,13 +739,27 @@ export class Live0gClient implements ChainClient {
     // than a block to serve the receipt. viem's DEFAULT is 6 retries with
     // (1 << n) * 200ms backoff — about 12s total, not the 180s `timeout`
     // suggests — which a lagging node blows straight through.
+    //
+    // One call is not enough on its own, whatever its retry count: it stays on
+    // the peer it started with, and a peer that is behind stays behind. So the
+    // call is re-entered against a wall-clock deadline (see ./receipt), which
+    // both gives the load balancer another chance and makes the total wait a
+    // number an operator can set rather than a property of viem's backoff.
     let receipt: TransactionReceipt;
     try {
-      receipt = await this.pub.waitForTransactionReceipt({
-        hash,
-        retryCount: 20,
-        pollingInterval: 1_000,
-      });
+      receipt = await awaitReceipt(
+        () =>
+          this.pub.waitForTransactionReceipt({
+            hash,
+            retryCount: 6,
+            pollingInterval: 1_000,
+            timeout: RECEIPT_ATTEMPT_TIMEOUT_MS,
+          }),
+        // `?? DEFAULT` and not a required field: every test in this package
+        // builds its config with `as unknown as AgentGateConfig`, so a value
+        // added here is simply absent at runtime in all of them.
+        { timeoutMs: this.cfg.zgReceiptTimeoutMs ?? DEFAULT_RECEIPT_TIMEOUT_MS },
+      );
     } catch (err: unknown) {
       // Losing the receipt is NOT the same as the write failing, and the
       // difference is expensive: registerService is not idempotent, so an
@@ -664,10 +767,7 @@ export class Live0gClient implements ChainClient {
       // re-runs `wrap` mints a SECOND service on-chain that cannot be deleted.
       // Say what is actually known — the hash, and that the state is unknown
       // rather than failed.
-      if (
-        err instanceof TransactionReceiptNotFoundError ||
-        err instanceof WaitForTransactionReceiptTimeoutError
-      ) {
+      if (isReceiptLag(err)) {
         throw new AgentGateError(
           'TX_RECEIPT_UNCONFIRMED',
           `${what} was submitted as tx ${hash} but its receipt did not arrive in time. ` +
