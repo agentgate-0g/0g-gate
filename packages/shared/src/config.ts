@@ -6,36 +6,6 @@ export type AgentGateMode = 'mock' | 'live';
 /** The shipped default admin token. loadConfig() refuses it in live mode. */
 export const DEFAULT_ADMIN_TOKEN = 'dev-admin-token';
 
-/**
- * The deployed contracts on 0G Galileo Testnet (chain 16602), deployed
- * 2026-08-31. These are the CLI's built-in defaults, which is what makes
- * `npx agentgate-0g list` work with no configuration at all.
- *
- * None of the three is upgradable — a redeploy is a NEW address with empty
- * state, so changing these values silently repoints every zero-config user at
- * a registry with no history. Treat an edit here as a breaking release.
- */
-// The rotatable set (11ad4c7), deployed 2026-09-03 in block 52865624. This is
-// not a preference: the Service struct grew from 11 fields to 17, so this repo's
-// ABI cannot decode the previous deployment at all — reading it fails with
-// `Bytes value "32" is not a valid boolean` as the decoder walks the wrong
-// offsets. Code and contracts move together or not at all.
-//
-// That rule was written here after the FIRST time it was broken (the same
-// failure, quoting "18" instead of "32") and broken again anyway, because
-// nothing enforced it: 11ad4c7 regenerated abi.ts correctly and left these
-// addresses pointing at the contract before it. It is enforced now —
-// `abiHashes` below records the shape each address answers to, and
-// e2e/registry-abi-pin.test.ts fails offline on any commit that moves one
-// without the other.
-//
-// NOT yet shipped to npm: agentgate-0g 1.0.5 is the published version and it
-// carries the PREVIOUS set, so `npx agentgate-0g list` keeps reading the old
-// registry — which still holds its four services — until the next release.
-// Cutting one is what moves zero-config users over.
-export const DEFAULT_REGISTRY_ADDRESS = '0xDB3C29a09FdDe79828208603B743E769E9f6dBEe';
-export const DEFAULT_PAYMENT_ROUTER_ADDRESS = '0xCC3bbd10eBA7aa24F4F722E00e714e1413182c34';
-export const DEFAULT_SPEND_GUARD_ADDRESS = '0xfEA4236162d7126d90D59Dc15bBb8A93b3786938';
 
 /**
  * The router address mock mode advertises in its 402 invoices.
@@ -51,10 +21,6 @@ export const DEFAULT_SPEND_GUARD_ADDRESS = '0xfEA4236162d7126d90D59Dc15bBb8A93b3
  * so it can never be mistaken for a deployment in a log or a screenshot.
  */
 export const MOCK_PAYMENT_ROUTER_ADDRESS = '0x0000000000000000000000000000000000004021';
-export const DEFAULT_ZG_RPC_URL = 'https://evmrpc-testnet.0g.ai';
-export const DEFAULT_ZG_CHAIN_ID = 16602;
-export const DEFAULT_ZG_NETWORK = '0g-galileo';
-export const DEFAULT_ZG_EXPLORER_URL = 'https://chainscan-galileo.0g.ai';
 
 /**
  * Default hosted gateway the CLI targets in live mode when `--gateway` is unset.
@@ -74,14 +40,17 @@ export const DEFAULT_GATEWAY_URL = 'https://0g-gateway.equiflow.xyz';
  * Default hosted dashboard the CLI links to in live mode when printing the
  * service detail URL; mock mode links to http://localhost:<DASHBOARD_PORT>.
  *
- * `agentgate.mdloglabs.org` — no `0g-` — is the older CASPER deployment and is
- * deliberately NOT this value, the same trap DEFAULT_GATEWAY_URL warns about.
- * It is worse here than a dead link would be: that host serves the same numeric
- * service ids in CSPR and answers 200, so a seller who just registered on 0G
- * follows this link and reads a confident, entirely unrelated page with nothing
- * to signal the mistake. Asserted in packages/shared/test/config.test.ts.
+ * `agentgate.mdloglabs.org` — the mdloglabs host, no `0g-` — is the older
+ * CASPER deployment and is deliberately NOT this value, the same trap
+ * DEFAULT_GATEWAY_URL warns about. It is worse here than a dead link would be:
+ * that host serves the same numeric service ids in CSPR and answers 200, so a
+ * seller who just registered on 0G follows this link and reads a confident,
+ * entirely unrelated page with nothing to signal the mistake. The 0G dashboard
+ * moved with the gateway to the equiflow.xyz tunnel on 2026-09-15; its previous
+ * host, `agentgate-0g.mdloglabs.org`, no longer resolves at all. Asserted in
+ * packages/shared/test/config.test.ts.
  */
-export const DEFAULT_DASHBOARD_URL = 'https://agentgate-0g.mdloglabs.org';
+export const DEFAULT_DASHBOARD_URL = 'https://agentgate.equiflow.xyz';
 
 
 /**
@@ -149,49 +118,95 @@ export interface NetworkProfile {
   router: string;
   spendGuard: string;
   abiHashes: AbiHashes;
+  /**
+   * The block the FIRST of the three contracts was created in — where every
+   * `eth_getLogs` history read starts. A contract cannot emit before it
+   * exists, so nothing is below this block, and anchoring reads here instead
+   * of at `head - N` is what keeps a quiet week from emptying the activity
+   * feed. 0 for an undeployed profile. Written by scripts/set-deployment.ts,
+   * which finds it on the chain itself, never by hand.
+   */
+  deployBlock: number;
 }
 
 /**
- * `mainnet` intentionally carries EMPTY contract addresses: nothing is deployed
- * to 0G mainnet yet, and an empty address fails closed at the first use with
- * "not deployed" instead of silently reusing a testnet one. Fill these in as
- * part of the mainnet deploy, in the same commit that records the addresses.
+ * The deployed contract sets, one per network, written by
+ * scripts/set-deployment.ts only after it has verified the addresses, their
+ * wiring, their ABI shape and their creation block against the chain itself.
  *
- * NOTE: the mainnet explorer host mirrors the testnet naming
- * (`chainscan-galileo.0g.ai` -> `chainscan.0g.ai`) and answers 200, but it could
- * not be confirmed programmatically as the mainnet instance. It is used only to
- * build display links, so a wrong value is a broken link rather than lost funds
- * — verify it before the first mainnet announcement.
+ * None of the contracts is upgradable — a redeploy is a NEW address with empty
+ * state, so changing an address here silently repoints every zero-config user
+ * at a registry with no history. Treat an edit as a breaking release. The
+ * Service struct has also changed shape before (11 → 17 fields) without a
+ * redeploy, which is why `abiHashes` records the shape each address answers
+ * to and e2e/registry-abi-pin.test.ts fails offline on any commit that moves
+ * one without the other.
+ *
+ * Galileo: deployed 2026-09-03 in block 52865624. Mainnet: deployed 2026-09-15
+ * in blocks 44406357–44406358 by the same wallet, byte-identical (the ABI
+ * hashes match), source verified on both explorers. An UNDEPLOYED profile must
+ * carry empty addresses, so a live process fails closed with "not deployed"
+ * instead of silently reusing another network's — that is how `mainnet` was
+ * written until its deploy.
  */
 export const NETWORK_PROFILES: Record<string, NetworkProfile> = {
   galileo: {
-    network: DEFAULT_ZG_NETWORK,
-    chainId: DEFAULT_ZG_CHAIN_ID,
-    rpcUrl: DEFAULT_ZG_RPC_URL,
-    explorerUrl: DEFAULT_ZG_EXPLORER_URL,
-    registry: DEFAULT_REGISTRY_ADDRESS,
-    router: DEFAULT_PAYMENT_ROUTER_ADDRESS,
-    spendGuard: DEFAULT_SPEND_GUARD_ADDRESS,
+    network: '0g-galileo',
+    chainId: 16602,
+    rpcUrl: 'https://evmrpc-testnet.0g.ai',
+    explorerUrl: 'https://chainscan-galileo.0g.ai',
+    registry: '0xDB3C29a09FdDe79828208603B743E769E9f6dBEe',
+    router: '0xCC3bbd10eBA7aa24F4F722E00e714e1413182c34',
+    spendGuard: '0xfEA4236162d7126d90D59Dc15bBb8A93b3786938',
     abiHashes: {
       registry: 'f974c4c3f15160d727d3a2fee43c5fe1f1a441d787645bc7d1c66c9e0b5a3bf2',
       router: '5f2a6161970e2440ccab4813b4c7fc93cb9a04596de333d9b8efa60b61587b73',
       spendGuard: '485afa918375f547ec3a16816b14ce92d8ea68bdcf63f2937e13e8a3199a6b9d',
     },
+    deployBlock: 52865624,
   },
   mainnet: {
     network: '0g-mainnet',
     chainId: 16661,
     rpcUrl: 'https://evmrpc.0g.ai',
     explorerUrl: 'https://chainscan.0g.ai',
-    registry: '',
-    router: '',
-    spendGuard: '',
-    abiHashes: { registry: '', router: '', spendGuard: '' },
+    registry: '0x48144BF9d966789bf4Db4e84349d4F4878a4b7Da',
+    router: '0x5102EB216b65CF950D3e88c8ddD51008de0845eF',
+    spendGuard: '0xDfD0f8eE32Cb01015cD131d463E83e6974A9D761',
+    abiHashes: {
+      registry: 'f974c4c3f15160d727d3a2fee43c5fe1f1a441d787645bc7d1c66c9e0b5a3bf2',
+      router: '5f2a6161970e2440ccab4813b4c7fc93cb9a04596de333d9b8efa60b61587b73',
+      spendGuard: '485afa918375f547ec3a16816b14ce92d8ea68bdcf63f2937e13e8a3199a6b9d',
+    },
+    deployBlock: 44406357,
   },
 };
 
-/** The profile used when ZG_NETWORK_PROFILE is unset. */
-export const DEFAULT_NETWORK_PROFILE = 'galileo';
+/**
+ * The profile used when ZG_NETWORK_PROFILE is unset — what `npx agentgate-0g`
+ * with no configuration talks to, and what the hosted gateway and dashboard
+ * serve. Mainnet since 2026-09-15: the public hosts (0g-gateway.equiflow.xyz,
+ * agentgate.equiflow.xyz) moved to the mainnet deployment that day, and a
+ * default that still named Galileo would `wrap` on one chain and map the
+ * upstream on a gateway serving the other. Galileo stays fully supported
+ * behind `ZG_NETWORK_PROFILE=galileo`.
+ */
+export const DEFAULT_NETWORK_PROFILE = 'mainnet';
+
+/**
+ * The default profile's values, exported under the names the CLI and SDK have
+ * always used for "the zero-config chain". They FOLLOW the default profile:
+ * before 2026-09-15 they were the Galileo literals, and any consumer that
+ * wanted Galileo specifically should read NETWORK_PROFILES.galileo instead.
+ */
+const DEFAULT_PROFILE: NetworkProfile = NETWORK_PROFILES[DEFAULT_NETWORK_PROFILE]!;
+export const DEFAULT_ZG_RPC_URL = DEFAULT_PROFILE.rpcUrl;
+export const DEFAULT_ZG_CHAIN_ID = DEFAULT_PROFILE.chainId;
+export const DEFAULT_ZG_NETWORK = DEFAULT_PROFILE.network;
+export const DEFAULT_ZG_EXPLORER_URL = DEFAULT_PROFILE.explorerUrl;
+export const DEFAULT_REGISTRY_ADDRESS = DEFAULT_PROFILE.registry;
+export const DEFAULT_PAYMENT_ROUTER_ADDRESS = DEFAULT_PROFILE.router;
+export const DEFAULT_SPEND_GUARD_ADDRESS = DEFAULT_PROFILE.spendGuard;
 
 export function networkProfile(name: string): NetworkProfile {
   const found = NETWORK_PROFILES[name];
@@ -241,7 +256,7 @@ export interface AgentGateConfig {
    * or X-Forwarded-For becomes spoofable.
    */
   trustProxy: number;
-  // live mode (0G Galileo Testnet)
+  // live mode (0G — the ZG_NETWORK_PROFILE network: mainnet by default, or galileo)
   zgRpcUrl: string;
   /**
    * How long to keep asking for a transaction receipt before reporting it
@@ -260,8 +275,21 @@ export interface AgentGateConfig {
   registryContractAddress: string;
   paymentRouterAddress: string;
   spendGuardAddress: string;
-  /** `eth_getLogs` lookback window (in blocks) for activity/history reads. */
-  activityLookbackBlocks: number;
+  /**
+   * The first block any `eth_getLogs` history read covers: the block the
+   * contracts were deployed in. Nothing they emitted can be below it, so a
+   * read anchored here sees the deployment's WHOLE history however long the
+   * service has been quiet. See NetworkProfile.deployBlock.
+   */
+  contractsDeployBlock: number;
+  /**
+   * Optional cap, in blocks back from the head, on how far a history read
+   * reaches — `null` (the default) means all the way to `contractsDeployBlock`.
+   * Only for an RPC that rejects wide `eth_getLogs` ranges; both 0G RPCs
+   * answer a deploy-to-head query in well under a second. A cap reintroduces
+   * the failure it bounds: anything older than it is invisible.
+   */
+  activityLookbackBlocks: number | null;
   gateSignerKey: string;
   buyerSignerKey: string;
   sellerSignerKey: string;
@@ -403,13 +431,31 @@ export function loadConfig(
     mode === 'mock' ? MOCK_PAYMENT_ROUTER_ADDRESS : profile.router,
   );
   const spendGuardAddress = readStr(env, 'SPEND_GUARD_ADDRESS', profile.spendGuard);
-  // 1,000,000 blocks, not 50,000. 0G Galileo produces a block every ~0.5s, so
-  // the old default was under SEVEN HOURS of history — a service busy yesterday
-  // showed an empty activity ledger today, and nothing in the UI distinguished
-  // "nothing happened" from "it aged out of the window". The public RPC returns
-  // a 1,000,000-block eth_getLogs in the same ~0.8s it returns 10,000 (measured
-  // against evmrpc-testnet.0g.ai), so the wider window is free. ~6 days here.
-  const activityLookbackBlocks = readInt(env, 'ACTIVITY_LOOKBACK_BLOCKS', 1_000_000, 1, Number.MAX_SAFE_INTEGER);
+  // History reads start at the deploy block, not at `head - N`. A rolling
+  // window empties as soon as the service is idle longer than the window:
+  // 50,000 blocks (seven hours at 0G's ~0.5 s blocks) did that, was raised to
+  // 1,000,000 (six days), and did it again a week later — the feed went blank
+  // and every attestation older than the window lost its tx hash, while the
+  // chain still had all of it. The profile's block describes the PROFILE's
+  // registry only: an operator's own deployment was created somewhere else, so
+  // an overridden registry starts at genesis unless CONTRACTS_DEPLOY_BLOCK says
+  // where. Genesis is safe — both 0G RPCs serve a full-chain eth_getLogs in
+  // under a second — it just scans blocks that hold nothing.
+  const contractsDeployBlock = readInt(
+    env,
+    'CONTRACTS_DEPLOY_BLOCK',
+    registryContractAddress.toLowerCase() === profile.registry.toLowerCase() ? profile.deployBlock : 0,
+    0,
+    Number.MAX_SAFE_INTEGER,
+  );
+  // Unset (the default) means "all the way back to the deploy block". The cap
+  // exists only for an RPC that refuses wide getLogs ranges, and it brings the
+  // blank-feed failure back in proportion to how tight it is, which is why the
+  // dashboard says so whenever one is configured.
+  const activityLookbackBlocks =
+    readStr(env, 'ACTIVITY_LOOKBACK_BLOCKS', '') === ''
+      ? null
+      : readInt(env, 'ACTIVITY_LOOKBACK_BLOCKS', 1, 1, Number.MAX_SAFE_INTEGER);
   const gateSignerKey = readPrivateKey(env, 'GATE_SIGNER_KEY');
   const buyerSignerKey = readPrivateKey(env, 'BUYER_SIGNER_KEY');
   const sellerSignerKey = readPrivateKey(env, 'SELLER_SIGNER_KEY');
@@ -464,6 +510,7 @@ export function loadConfig(
     registryContractAddress,
     paymentRouterAddress,
     spendGuardAddress,
+    contractsDeployBlock,
     activityLookbackBlocks,
     gateSignerKey,
     buyerSignerKey,

@@ -67,14 +67,15 @@ function AddressRow({
   );
 }
 
-function buildCurlSnippet(endpointUrl: string): string {
+function buildCurlSnippet(endpointUrl: string, network: string): string {
   return [
     '# 1 — call without payment → HTTP 402 + PaymentRequiredResponse JSON',
     `curl -i ${endpointUrl}`,
     '',
     '# 2 — call PaymentRouter.pay(serviceId, nonce, payTo) at accepts[0].extra.router',
     '#     with msg.value = accepts[0].maxAmountRequired wei, receive <txHash>.',
-    '#     Encode proof: base64({"x402Version":1,"scheme":"exact-settled","network":"0g-galileo",',
+    // The proof names the network the invoice was settled on — this instance's.
+    `#     Encode proof: base64({"x402Version":1,"scheme":"exact-settled","network":"${network}",`,
     '#       "payload":{"transaction":"<txHash>","nonce":"<nonce>","from":"<address>"}})',
     `curl -s ${endpointUrl} \\`,
     '  -H "X-PAYMENT: <base64-encoded-payload>"',
@@ -235,7 +236,7 @@ export function ServiceDetail({ id }: { id: number }) {
         <div className="mb-3 flex items-center justify-between">
           <p className="microlabel">try it — the HTTP 402 flow</p>
         </div>
-        <CommandBlock text={buildCurlSnippet(service.endpointUrl)} prompt={null} />
+        <CommandBlock text={buildCurlSnippet(service.endpointUrl, network)} prompt={null} />
       </section>
 
       {/* attestation feed */}

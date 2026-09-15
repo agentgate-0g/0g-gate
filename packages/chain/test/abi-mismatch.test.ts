@@ -95,7 +95,7 @@ function clientFor(port: number): Live0gClient {
     zgNetwork: '0g-galileo',
     registryContractAddress: '0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1',
     paymentRouterAddress: '',
-    activityLookbackBlocks: 50_000,
+    contractsDeployBlock: 0, activityLookbackBlocks: null,
   } as unknown as AgentGateConfig);
 }
 

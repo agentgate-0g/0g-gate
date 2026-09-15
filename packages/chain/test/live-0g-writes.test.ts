@@ -75,7 +75,7 @@ function configFor(registry: string, router: string): AgentGateConfig {
   return {
     zgRpcUrl: RPC, zgChainId: 31337, zgNetwork: '0g-galileo',
     registryContractAddress: registry, paymentRouterAddress: router,
-    activityLookbackBlocks: 50_000,
+    contractsDeployBlock: 0, activityLookbackBlocks: null,
   } as unknown as AgentGateConfig;
 }
 
@@ -521,16 +521,49 @@ describe('listRecentActivity', () => {
     }
   });
 
-  it('bounds the lookback to activityLookbackBlocks', async () => {
-    // Public RPCs cap getLogs ranges and `fromBlock: 0` fails outright on a
-    // live chain, so the window must be bounded — with a one-block lookback
-    // this must see strictly less than the full history.
-    const narrow = new Live0gClient({
+  it('still returns the whole history after the chain has moved past every event', async () => {
+    // Idle time must not empty the feed. The window used to start at
+    // `latest - ACTIVITY_LOOKBACK_BLOCKS`, so a service quiet for longer than
+    // the window (~6 days at 0G's 0.5 s blocks) rendered an empty ledger, and
+    // every attestation older than that lost its recordTxHash. It happened in
+    // production twice, and each time the number was simply raised. The floor
+    // is now the block the contracts were deployed in, so nothing can scroll
+    // out of it — both 0G RPCs answer a deploy-to-head getLogs in under a
+    // second, so the rolling window was never buying anything.
+    const before = await client.listRecentActivity(50);
+    expect(before.length).toBeGreaterThan(0);
+    const [attested] = await client.listAttestations(1, 1);
+    expect(attested!.recordTxHash).toMatch(/^0x[0-9a-f]{64}$/i);
+
+    await rpc('anvil_mine', ['0x40']); // 64 empty blocks: wider than the cap below
+
+    const idle = new Live0gClient(configFor(registryAddress, routerAddress));
+    expect(await idle.listRecentActivity(50)).toEqual(before);
+    expect((await idle.listAttestations(1, 1))[0]!.recordTxHash).toBe(attested!.recordTxHash);
+  });
+
+  it('an explicit ACTIVITY_LOOKBACK_BLOCKS is still a cap, and the deploy block is still a floor', async () => {
+    // The cap exists for an operator whose RPC rejects wide getLogs ranges,
+    // and it keeps the old semantics exactly: a window narrower than the idle
+    // gap the test above just mined sees nothing, and the attestation join
+    // that shares the window comes back empty-handed too.
+    const capped = new Live0gClient({
       ...configFor(registryAddress, routerAddress),
-      activityLookbackBlocks: 1,
+      activityLookbackBlocks: 16,
     });
-    const all = await client.listRecentActivity(50);
-    expect((await narrow.listRecentActivity(50)).length).toBeLessThan(all.length);
+    expect(await capped.listRecentActivity(50)).toEqual([]);
+    expect((await capped.listAttestations(1, 1))[0]!.recordTxHash).toBe('');
+
+    // The floor is honoured on its own: a deploy block past every event hides
+    // them all. That is the shape of a profile's block number pasted against a
+    // different chain, and it must read as "nothing since deploy", never as
+    // history a contract could not have emitted before it existed.
+    const pub = createPublicClient({ transport: http(RPC) });
+    const future = new Live0gClient({
+      ...configFor(registryAddress, routerAddress),
+      contractsDeployBlock: Number(await pub.getBlockNumber()),
+    });
+    expect(await future.listRecentActivity(50)).toEqual([]);
   });
 
   it('honours the limit', async () => {

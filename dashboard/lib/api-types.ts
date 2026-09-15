@@ -41,11 +41,17 @@ export interface ActivityResponse {
   /** True when served from the server cache because a live refresh failed (e.g. an RPC outage). */
   stale?: boolean;
   /**
-   * How many blocks back the feed searched. An empty list means "nothing in
-   * this window", NOT "nothing ever happened" — the UI has to say which, or a
-   * service whose history simply aged out reads as a service nobody ever used.
+   * The block the feed's window starts at: the block the contracts were
+   * deployed in, so an empty list means the deployment has never been used.
    */
-  lookbackBlocks?: number;
+  historyFromBlock: number;
+  /**
+   * The operator's ACTIVITY_LOOKBACK_BLOCKS cap, or null when there is none.
+   * Under a cap an empty list only means "nothing in the last N blocks", NOT
+   * "nothing ever happened" — the UI has to say which, or a service whose
+   * history simply aged out reads as a service nobody ever used.
+   */
+  lookbackBlocks: number | null;
 }
 
 export interface StatsResponse {
@@ -60,4 +66,27 @@ export interface StatsResponse {
 
 export interface ApiErrorBody {
   error: string;
+}
+
+/**
+ * Which chain this dashboard instance reads, resolved from ZG_NETWORK_PROFILE
+ * (and any per-value overrides) at REQUEST time, never at build time — one
+ * `next build` serves both the Galileo and the mainnet instance, so nothing
+ * about the network may be baked in. Every label, explorer link and address
+ * the UI shows comes from here; the alternative was a mainnet instance that
+ * called itself "galileo testnet" and linked every tx to the wrong explorer.
+ */
+export interface NetworkInfo {
+  /** Machine name, e.g. `0g-galileo`, `0g-mainnet`, `mock`. */
+  network: string;
+  /** Human label for badges and copy, e.g. `0G Galileo Testnet`. */
+  label: string;
+  chainId: number;
+  /** Explorer origin without trailing slash; `''` for the mock devnet. */
+  explorerUrl: string;
+  registry: string;
+  router: string;
+  spendGuard: string;
+  /** Block the contracts were deployed in — where every history read starts. */
+  deployBlock: number;
 }

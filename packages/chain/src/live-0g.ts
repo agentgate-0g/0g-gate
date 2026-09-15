@@ -467,19 +467,11 @@ export class Live0gClient implements ChainClient {
     // every live attestation carries an empty hash: the CLI prints a dangling
     // "tx ", the dashboard renders a link to nowhere, and — because the list is
     // keyed by it — React sees every row as the same key.
-    // cacheTime: 0 is load-bearing. viem caches getBlockNumber for its polling
-    // interval (~4s) by default, so a block mined moments ago can still be
-    // missing from the cached height — and this value is `toBlock`, so the
-    // window would silently end BELOW the event just written. The caller reads
-    // its own fresh write and gets nothing back.
-    const latest = await this.pub.getBlockNumber({ cacheTime: 0 });
-    const lookback = BigInt(this.cfg.activityLookbackBlocks);
     const logs = await this.pub.getLogs({
+      ...(await this.historyRange()),
       address: registry,
       event: ATTESTATION_RECORDED_EVENT,
       args: { serviceId: BigInt(id) },
-      fromBlock: latest > lookback ? latest - lookback : 0n,
-      toBlock: latest,
       strict: true,
     });
     const byPayment = new Map(logs.map((l) => [l.args.paymentTxHash, l.transactionHash]));
@@ -489,10 +481,44 @@ export class Live0gClient implements ChainClient {
       paymentTxHash: a.paymentTxHash,
       success: a.success,
       timestamp: Number(a.timestamp),
-      // '' only when the attestation predates the lookback window. Consumers
-      // must treat an empty hash as "unknown", never as a renderable link.
+      // '' only when the attestation predates a configured ACTIVITY_LOOKBACK_BLOCKS
+      // cap — the window otherwise reaches the deploy block, below which no
+      // attestation can exist. Consumers must treat an empty hash as
+      // "unknown", never as a renderable link.
       recordTxHash: byPayment.get(a.paymentTxHash) ?? '',
     }));
+  }
+
+  /**
+   * The `eth_getLogs` window every history read uses: from the block the
+   * contracts were deployed in, to the head.
+   *
+   * It is anchored at the DEPLOY block and not at `head - N` because a rolling
+   * window is empty exactly when the service has been quiet longer than the
+   * window — which is when an operator looks at the ledger to see what
+   * happened. A 50,000-block window (seven hours at 0G's ~0.5 s blocks) went
+   * blank in production, was widened to 1,000,000 (six days), and went blank
+   * again a week later, taking every older attestation's `recordTxHash` with
+   * it; the chain had all of it the whole time. Nothing a contract emitted can
+   * sit below its creation block, so this floor loses nothing, and both 0G
+   * RPCs (testnet and mainnet) answer a deploy-to-head query in well under a
+   * second — the same as a 10,000-block one. "Public RPCs cap getLogs ranges"
+   * was the reason the window was bounded at all, and it is not true of
+   * these. `ACTIVITY_LOOKBACK_BLOCKS` remains as an opt-in cap for an RPC
+   * where it is, and it brings the blank-feed failure back in proportion.
+   *
+   * cacheTime: 0 is load-bearing. viem caches getBlockNumber for its polling
+   * interval (~4s) by default, so a block mined moments ago can still be
+   * missing from the cached height — and this value is `toBlock`, so the
+   * window would silently end BELOW the event just written. The caller reads
+   * its own fresh write and gets nothing back.
+   */
+  private async historyRange(): Promise<{ fromBlock: bigint; toBlock: bigint }> {
+    const toBlock = await this.pub.getBlockNumber({ cacheTime: 0 });
+    const floor = BigInt(this.cfg.contractsDeployBlock);
+    const cap = this.cfg.activityLookbackBlocks;
+    const capped = cap === null ? 0n : toBlock > BigInt(cap) ? toBlock - BigInt(cap) : 0n;
+    return { fromBlock: floor > capped ? floor : capped, toBlock };
   }
 
   async getBalance(account: string): Promise<Wei> {
@@ -515,23 +541,15 @@ export class Live0gClient implements ChainClient {
    * through to insertion order, listing every attestation above every payment
    * regardless of what actually happened first.
    *
-   * The lookback is BOUNDED: public RPCs cap getLogs ranges, and `fromBlock: 0`
-   * would fail outright on a live chain.
+   * The window reaches the DEPLOY BLOCK (see `historyRange`), so the feed is
+   * the deployment's whole history — never a rolling slice of it.
    */
   async listRecentActivity(limit = 50): Promise<ActivityEvent[]> {
     // Resolved BEFORE the first RPC call, so a gateway booted without a deploy
     // answers CONTRACT_NOT_DEPLOYED immediately instead of paying a round-trip
     // to learn what its own config already knew.
     const registry = this.registry();
-    // cacheTime: 0 is load-bearing. viem caches getBlockNumber for its polling
-    // interval (~4s) by default, so a block mined moments ago can still be
-    // missing from the cached height — and this value is `toBlock`, so the
-    // window would silently end BELOW the event just written. The caller reads
-    // its own fresh write and gets nothing back.
-    const latest = await this.pub.getBlockNumber({ cacheTime: 0 });
-    const lookback = BigInt(this.cfg.activityLookbackBlocks);
-    const fromBlock = latest > lookback ? latest - lookback : 0n;
-    const range = { fromBlock, toBlock: latest, strict: true } as const;
+    const range = { ...(await this.historyRange()), strict: true } as const;
 
     const [registered, attested, paid] = await Promise.all([
       this.pub.getLogs({ ...range, address: registry, event: SERVICE_REGISTERED_EVENT }),
@@ -586,10 +604,11 @@ export class Live0gClient implements ChainClient {
       if (a.blockNumber !== b.blockNumber) return a.blockNumber < b.blockNumber ? 1 : -1;
       return b.logIndex - a.logIndex;
     });
-    // Paged BEFORE any block header is read. The window is 50 000 blocks wide,
-    // so resolving a timestamp for every event-bearing block in it — then
-    // throwing all but `limit` away — would put an unbounded, concurrent burst
-    // of getBlock calls against a public RPC behind a two-item request.
+    // Paged BEFORE any block header is read. The window is the deployment's
+    // entire history, so resolving a timestamp for every event-bearing block in
+    // it — then throwing all but `limit` away — would put an unbounded,
+    // concurrent burst of getBlock calls against a public RPC behind a two-item
+    // request.
     const page = pending.slice(0, limit);
 
     // Block timestamps are per-BLOCK, not per-log: fetch each distinct block

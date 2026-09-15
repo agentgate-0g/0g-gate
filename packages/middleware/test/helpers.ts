@@ -42,7 +42,7 @@ export function testConfig(overrides: Partial<AgentGateConfig> = {}): AgentGateC
     registryContractAddress: '',
     paymentRouterAddress: `0x${'11'.repeat(20)}`,
     spendGuardAddress: '',
-    activityLookbackBlocks: 50_000,
+    contractsDeployBlock: 0, activityLookbackBlocks: null,
     gateSignerKey: '',
     buyerSignerKey: '',
     sellerSignerKey: '',

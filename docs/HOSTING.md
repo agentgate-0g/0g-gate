@@ -1,12 +1,22 @@
 # AgentGate — Hosting runbook
 
-How to put the stack on the public internet once accounts/credentials exist.
-Deploying the **registry contract** itself is a separate runbook
+How to put the stack on the public internet on managed platforms (Vercel +
+Railway). Deploying the **registry contract** itself is a separate runbook
 ([docs/DEPLOY.md](DEPLOY.md)); this document covers the **services**.
+
+> **What the public instance actually runs (since 2026-09-15):** the gateway at
+> `https://0g-gateway.equiflow.xyz` and the dashboard at
+> `https://agentgate.equiflow.xyz` are pm2 processes on a single host behind a
+> Cloudflare tunnel, both serving **0G Mainnet** (`ZG_NETWORK_PROFILE=mainnet`,
+> the default), with a second pair serving Galileo (`ZG_NETWORK_PROFILE=galileo`,
+> gateway `https://0g-gateway.mdloglabs.org`). That layout is
+> [`deploy/agentgate.ecosystem.config.cjs`](../deploy/agentgate.ecosystem.config.cjs)
+> and its runbook is [docs/DEPLOY-GATEWAY.md](DEPLOY-GATEWAY.md). The rest of
+> this file is the platform-hosted alternative.
 
 | Component | Where | Config in repo |
 |---|---|---|
-| Dashboard (Next.js) | Vercel | [`vercel.json`](../vercel.json) (root), [`.vercelignore`](../.vercelignore) |
+| Dashboard (Next.js) | Vercel | project settings (Root Directory = `dashboard`, see §1), [`.vercelignore`](../.vercelignore) |
 | Middleware (402 gateway) | Railway | [`packages/middleware/Dockerfile`](../packages/middleware/Dockerfile), [`packages/middleware/railway.json`](../packages/middleware/railway.json) |
 | Oracle (RWA feed) | Railway | [`packages/oracle/Dockerfile`](../packages/oracle/Dockerfile), [`packages/oracle/railway.json`](../packages/oracle/railway.json) |
 | Devnet (mock chain, demo only) | Docker (compose) | [`packages/devnet/Dockerfile`](../packages/devnet/Dockerfile), [`docker-compose.hosting.yml`](../docker-compose.hosting.yml) |
@@ -23,29 +33,14 @@ The repo is an npm-workspaces monorepo with the Next.js app in `dashboard/`
 (hoisted `node_modules` at the root, `transpilePackages: ['@agentgate/shared',
 '@agentgate/chain']` already set in `dashboard/next.config.mjs`).
 
-### Option A — root `vercel.json` (committed, recommended)
+### Project settings (there is no root `vercel.json`)
 
-Import the repo into Vercel and **leave Root Directory at the repo root**. The
-committed [`vercel.json`](../vercel.json) does the rest:
-
-```json
-{
-  "framework": "nextjs",
-  "installCommand": "npm install",
-  "buildCommand": "npm run build -w dashboard",
-  "outputDirectory": "dashboard/.next"
-}
-```
-
-`npm install` at the root installs the whole workspace (so `@agentgate/shared` and
-`@agentgate/chain` resolve as workspace symlinks), and the build targets the
-`dashboard` workspace. `.vercelignore` keeps the 7 GB `contracts/` tree out of the
-upload.
-
-### Option B — project settings instead of `vercel.json`
-
-If you prefer dashboard-side settings (delete `vercel.json` first — it overrides
-the UI):
+A root `vercel.json` that built from the workspace root was removed: Vercel never
+expanded the npm workspaces from there, so `next` — which lives in
+`dashboard/package.json` — was neither installed nor detected ("No Next.js
+version detected" on every deploy). The Vercel CLI also drops a generated
+`vercel.json` and a `.vercel/` link directory on first run; both are gitignored
+and must stay out of the repo. Configure the project in the Vercel UI instead:
 
 - **Root Directory** = `dashboard`
 - Enable **"Include files outside the Root Directory"** (Settings → General) —
@@ -61,13 +56,13 @@ For **live mode** (the normal hosted configuration):
 | Var | Value |
 |---|---|
 | `AGENTGATE_MODE` | `live` |
-| `ZG_RPC_URL` | `https://evmrpc-testnet.0g.ai` |
-| `ZG_CHAIN_ID` | `16602` |
-| `ZG_NETWORK` | `0g-galileo` |
-| `ZG_EXPLORER_URL` | `https://chainscan-galileo.0g.ai` |
-| `REGISTRY_CONTRACT_ADDRESS` | set after the contract deploy (see §6) |
-| `PAYMENT_ROUTER_ADDRESS` | set after the contract deploy (see §6) |
-| `ACTIVITY_LOOKBACK_BLOCKS` | optional, default `50000` — the `eth_getLogs` window for `/activity` |
+| `ZG_NETWORK_PROFILE` | `mainnet` (the default — 0G Mainnet, chain 16661) or `galileo` (0G Galileo Testnet, chain 16602). One variable selects RPC, chain id, network name, explorer, the three contract addresses and their deploy block |
+| `ZG_RPC_URL` / `ZG_CHAIN_ID` / `ZG_NETWORK` / `ZG_EXPLORER_URL` | leave unset — each overrides one value of the selected profile |
+| `REGISTRY_CONTRACT_ADDRESS` | leave unset (the profile's); set only for a deployment of your own (see §6) |
+| `PAYMENT_ROUTER_ADDRESS` | leave unset (the profile's); set only for a deployment of your own (see §6) |
+| `NEXT_PUBLIC_SITE_URL` | the public origin, for canonical/Open Graph links (default `https://agentgate.equiflow.xyz`) |
+| `CONTRACTS_DEPLOY_BLOCK` | only with your own contracts — the block they were deployed in; `/activity` reads history from there (the profile knows its own) |
+| `ACTIVITY_LOOKBACK_BLOCKS` | leave unset — an optional cap on the `eth_getLogs` window; any cap blanks `/activity` once the service idles longer than it |
 
 > **Do not put `AGENTGATE_ADMIN_TOKEN` on Vercel.** The dashboard never reads it.
 > It is read-only — every route is a GET, there is no `/admin` surface — so
@@ -132,12 +127,10 @@ apply, on Railway the injected `PORT` wins.
 |---|---|
 | `AGENTGATE_MODE` | `live` |
 | `AGENTGATE_ADMIN_TOKEN` | strong unique token (config refuses the default in live mode) |
-| `ZG_RPC_URL` | `https://evmrpc-testnet.0g.ai` |
-| `ZG_CHAIN_ID` | `16602` |
-| `ZG_NETWORK` | `0g-galileo` |
-| `ZG_EXPLORER_URL` | `https://chainscan-galileo.0g.ai` |
-| `REGISTRY_CONTRACT_ADDRESS` | set after contract deploy (see §6) |
-| `PAYMENT_ROUTER_ADDRESS` | set after contract deploy (see §6) |
+| `ZG_NETWORK_PROFILE` | `mainnet` (default) or `galileo` — must match the dashboard's, and a gateway serves ONE network: run two services for two networks |
+| `ZG_RPC_URL` / `ZG_CHAIN_ID` / `ZG_NETWORK` / `ZG_EXPLORER_URL` | leave unset (the profile's) |
+| `REGISTRY_CONTRACT_ADDRESS` | leave unset (the profile's); set only for a deployment of your own (see §6) |
+| `PAYMENT_ROUTER_ADDRESS` | leave unset (the profile's); set only for a deployment of your own (see §6) |
 | `GATE_SIGNER_KEY` | attestor private key (`0x` + 64 hex), injected from the platform's **secret store** — never a plain env var on a command line, never in a committed file. See [DEPLOY-GATEWAY.md](DEPLOY-GATEWAY.md#notes--security) for why an env-var key needs different handling than a key file |
 | `INVOICE_STORE_PATH` | ✓ **required in live mode** — `/app/packages/middleware/data/invoices.json`, i.e. on the volume below. `createApp()` throws `CONFIG_INVALID` and the service never boots without it |
 | `ATTESTATION_QUEUE_PATH` | recommended — `/app/packages/middleware/data/attestations.json`, same volume. Optional, but without it a served-and-paid call whose attestation had not confirmed before a restart is dropped from the trust ledger |
@@ -234,7 +227,8 @@ docker build -f packages/devnet/Dockerfile     -t agentgate-devnet .
 | `GATE_SIGNER_KEY` | ✓ req (platform secret) | — | — | — |
 | `INVOICE_STORE_PATH` | ✓ req in live mode (on the volume) | — | — | — |
 | `ATTESTATION_QUEUE_PATH` | opt, recommended (same volume) | — | — | — |
-| `ACTIVITY_LOOKBACK_BLOCKS` | opt | — | opt | — |
+| `CONTRACTS_DEPLOY_BLOCK` | opt (own contracts only) | — | opt (own contracts only) | — |
+| `ACTIVITY_LOOKBACK_BLOCKS` | leave unset | — | leave unset | — |
 | `DEVNET_URL` | mock mode only | — | mock mode only | — |
 | `ORACLE_STATIC` | — | opt (`1` = fixture) | — | — |
 | `INVOICE_TTL_MS` / `UPSTREAM_TIMEOUT_MS` | opt | — | — | — |
@@ -261,16 +255,22 @@ Every service exposes `GET /healthz` returning `200 {"ok":true,…}`:
 
 ---
 
-## 6. What changes after the contract deploy
+## 6. Pointing at a deployment of your own
 
-Until the contracts are on 0G Galileo, live mode boots fine but every
+Both 0G networks already carry a verified deployment that every process
+defaults to through `ZG_NETWORK_PROFILE`, so this section only applies if you
+deploy your **own** contract set ([docs/DEPLOY.md](DEPLOY.md)).
+
+With the addresses explicitly emptied, live mode boots fine but every
 contract-dependent call throws `CONTRACT_NOT_DEPLOYED` (503) — the full list is in
-[docs/DEPLOY.md](DEPLOY.md). The moment they are deployed:
+[docs/DEPLOY.md](DEPLOY.md). Once your contracts are deployed:
 
 1. Record the three **contract addresses** from the deploy.
-2. Set `REGISTRY_CONTRACT_ADDRESS` and `PAYMENT_ROUTER_ADDRESS` on **every**
-   live-mode service: the middleware (Railway) and the dashboard (Vercel) — plus
-   any CLI/agent env.
+2. Set `REGISTRY_CONTRACT_ADDRESS`, `PAYMENT_ROUTER_ADDRESS` and
+   `CONTRACTS_DEPLOY_BLOCK` on **every** live-mode service: the middleware
+   (Railway) and the dashboard (Vercel) — plus any CLI/agent env. (Or record the
+   set as a profile with `scripts/set-deployment.ts`, which verifies it against
+   the chain first.)
 3. Ensure `AGENTGATE_MODE=live` everywhere (middleware, dashboard). The
    live-mode invariants are the **middleware's**: a non-default
    `AGENTGATE_ADMIN_TOKEN`, a funded `GATE_SIGNER_KEY` (from the platform's

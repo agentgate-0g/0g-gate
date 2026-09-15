@@ -1,6 +1,10 @@
+'use client';
+
 import Link from 'next/link';
+import { useNetwork } from '@/components/network-context';
 
 export function Footer() {
+  const { label } = useNetwork();
   return (
     <footer className="border-t border-line">
       <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-8">
@@ -9,7 +13,7 @@ export function Footer() {
             Agent<span className="text-accent">Gate</span>
           </p>
           <p className="mt-1 text-xs text-mut">
-            HTTP 402 payments for AI agents on 0G Galileo Testnet.
+            HTTP 402 payments for AI agents on {label}.
           </p>
         </div>
         <div className="flex items-center gap-5 font-mono text-xs uppercase tracking-[0.18em]">

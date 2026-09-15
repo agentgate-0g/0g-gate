@@ -63,8 +63,9 @@ export default function ConfigurationPage() {
               <M>mock</M> or <M>live</M>
             </span>,
             <span key="m">
-              <M>mock</M> = in-process devnet, fully offline. <M>live</M> = 0G Galileo Testnet via
-              the public RPC. Any other value throws <M>CONFIG_INVALID</M> (
+              <M>mock</M> = in-process devnet, fully offline. <M>live</M> = 0G via the public RPC —
+              Mainnet by default, Galileo under <M>ZG_NETWORK_PROFILE=galileo</M>. Any other value
+              throws <M>CONFIG_INVALID</M> (
               <M>AGENTGATE_MODE must be &quot;mock&quot; or &quot;live&quot;</M>). The published CLI
               overrides this default to <M>live</M> — see below.
             </span>,
@@ -76,11 +77,13 @@ export default function ConfigurationPage() {
       <P>
         Every <DocLink href="/docs/cli">CLI</DocLink> command builds its env before calling{' '}
         <M>loadConfig()</M>. Precedence per key: explicit flag &gt; non-empty{' '}
-        <M>process.env</M> &gt; CLI built-in default. Two CLI built-ins differ from the defaults on
-        this page: the published CLI defaults <M>AGENTGATE_MODE</M> to <M>live</M> (not{' '}
-        <M>mock</M>) and <M>REGISTRY_CONTRACT_ADDRESS</M> to the deployed registry address. The
-        config-bearing flags are <M>--mode</M>, <M>--rpc-url</M>, <M>--registry</M>, <M>--key</M>{' '}
-        and <M>--admin-token</M>.
+        <M>process.env</M> &gt; CLI built-in default. Exactly one CLI built-in differs from the
+        defaults on this page: the published CLI defaults <M>AGENTGATE_MODE</M> to <M>live</M> (not{' '}
+        <M>mock</M>). Every chain value — RPC, chain id, registry, router — is left to{' '}
+        <M>loadConfig()</M> and the selected <M>ZG_NETWORK_PROFILE</M>, so a profile switch really
+        switches (an earlier CLI injected the Galileo registry on top of whatever profile was
+        chosen). The config-bearing flags are <M>--mode</M>, <M>--rpc-url</M>, <M>--registry</M>,{' '}
+        <M>--key</M> and <M>--admin-token</M>.
       </P>
       <P>
         <M>loadConfig()</M> also takes a second <M>opts</M> argument —{' '}
@@ -191,10 +194,11 @@ export default function ConfigurationPage() {
 
       <H2 id="live-0g">Live mode &amp; 0G</H2>
       <P>
-        These configure the 0G Galileo Testnet integration. They all have sensible Testnet defaults,
-        but the contract addresses become <strong>mandatory</strong> the moment{' '}
-        <M>AGENTGATE_MODE=live</M> and you want anything beyond a balance read. URLs are
-        protocol-checked: the RPC and explorer endpoints must be <M>http:</M>/<M>https:</M>.
+        These configure the 0G integration. One variable, <M>ZG_NETWORK_PROFILE</M>, selects a
+        complete chain identity — <M>mainnet</M> (the default) or <M>galileo</M> — and every other
+        value below defaults to that profile&apos;s, contract addresses included, so a live process
+        needs none of them unless it points at a deployment of its own. URLs are protocol-checked:
+        the RPC and explorer endpoints must be <M>http:</M>/<M>https:</M>.
       </P>
       <Callout tone="ok" title="There is no API key">
         Every read is a contract view call or an <M>eth_getLogs</M> against the public RPC. There is
@@ -205,73 +209,88 @@ export default function ConfigurationPage() {
         head={['Variable', 'Default', 'Required in live?', 'Meaning']}
         rows={[
           [
-            <M key="v">ZG_RPC_URL</M>,
-            <M key="d">https://evmrpc-testnet.0g.ai</M>,
+            <M key="v">ZG_NETWORK_PROFILE</M>,
+            <M key="d">mainnet</M>,
             'no (has default)',
-            '0G Galileo JSON-RPC endpoint. Must be a valid http/https URL.',
+            'Selects the whole chain identity as one unit — RPC, chain id, network name, explorer, the three contract addresses and their deploy block. `mainnet` (0G Mainnet, chain 16661, the default and what the hosted gateway serves) or `galileo` (0G Galileo Testnet, chain 16602); both carry a verified deployment. Every ZG_* variable below overrides one value of the selected profile.',
+          ],
+          [
+            <M key="v">ZG_RPC_URL</M>,
+            <M key="d">https://evmrpc.0g.ai</M>,
+            'no (has default)',
+            '0G JSON-RPC endpoint (the selected profile\'s; mainnet shown, galileo is https://evmrpc-testnet.0g.ai). Must be a valid http/https URL.',
           ],
           [
             <M key="v">ZG_CHAIN_ID</M>,
-            <M key="d">16602</M>,
+            <M key="d">16661</M>,
             'no (has default)',
-            'EVM chain id used when signing transactions. 16602 is Galileo Testnet — older sources say 16601; verify with `cast chain-id` before changing it.',
+            'EVM chain id used when signing transactions — the selected profile\'s: 16661 is 0G Mainnet, 16602 is Galileo Testnet (older sources say 16601; verify with `cast chain-id` before changing it). The live client also asserts the RPC really reports this id.',
           ],
           [
             <M key="v">ZG_NETWORK</M>,
-            <M key="d">0g-galileo</M>,
+            <M key="d">0g-mainnet</M>,
             'no (has default)',
-            'Network name string carried in the x402 invoice and the self-map signature. The buyer client refuses an invoice whose network does not match (NETWORK_MISMATCH).',
+            'Network name string carried in the x402 invoice and the self-map signature (`0g-galileo` under the galileo profile). The buyer client refuses an invoice whose network does not match (NETWORK_MISMATCH).',
           ],
           [
             <M key="v">ZG_EXPLORER_URL</M>,
-            <M key="d">https://chainscan-galileo.0g.ai</M>,
+            <M key="d">https://chainscan.0g.ai</M>,
             'no (has default)',
-            'Explorer base for the tx/address links the CLI and dashboard print. Must be a valid http/https URL.',
+            'Explorer base for the tx/address links the CLI and dashboard print (galileo: https://chainscan-galileo.0g.ai). Must be a valid http/https URL.',
           ],
           [
             <M key="v">REGISTRY_CONTRACT_ADDRESS</M>,
             <span key="d">
-              <M>&apos;&apos;</M> (empty)
+              the selected profile&apos;s registry
             </span>,
-            'no via CLI (has default)',
+            'no (has default)',
             <span key="m">
               Address of the deployed AgentGateRegistry (<M>0x&lt;40hex&gt;</M>).{' '}
-              <M>loadConfig()</M> defaults it to empty and validates the shape only when set, so a
-              gateway built directly from that config returns <M>CONTRACT_NOT_DEPLOYED</M> on every registry
-              call while it stays empty. The published CLI overlays the deployed address as its own
-              built-in default, so <M>npx agentgate-0g@latest list</M> / <M>status</M> read live
-              with zero config; set this only to point at a different deploy. See{' '}
+              <M>loadConfig()</M> takes it from the selected profile — the mainnet registry by
+              default — so <M>npx agentgate-0g@latest list</M> / <M>status</M> read live with zero
+              config. Set it only to point at a deployment of your own (then also set{' '}
+              <M>CONTRACTS_DEPLOY_BLOCK</M>); a malformed value is refused at boot, and an explicitly
+              empty one makes every registry call return <M>CONTRACT_NOT_DEPLOYED</M>. See{' '}
               <DocLink href="/docs/contract">Smart contract</DocLink>.
             </span>,
           ],
           [
             <M key="v">PAYMENT_ROUTER_ADDRESS</M>,
             <span key="d">
-              <M>&apos;&apos;</M> (empty)
+              the selected profile&apos;s router
             </span>,
-            <strong key="r" className="text-white">
-              yes (to pay or verify)
-            </strong>,
+            'no (has default)',
             <span key="m">
               Address of the deployed <M>PaymentRouter</M>. The gateway advertises it as{' '}
               <M>extra.router</M> in every 402 and reads its <M>Paid</M> logs to verify a payment;
-              the buyer client calls <M>pay()</M> on it. Unset, payments and verification both fail
-              closed with <M>CONTRACT_NOT_DEPLOYED</M> — reads still work.
+              the buyer client calls <M>pay()</M> on it. Defaults to the profile&apos;s router in
+              live mode (mock mode advertises a placeholder). Explicitly emptied, payments and
+              verification both fail closed with <M>CONTRACT_NOT_DEPLOYED</M> — reads still work.
             </span>,
           ],
           [
             <M key="v">SPEND_GUARD_ADDRESS</M>,
             <span key="d">
-              <M>&apos;&apos;</M> (empty)
+              the selected profile&apos;s spend guard
             </span>,
             'no (not yet wired)',
             'Address of the deployed SpendGuard escrow firewall. Deployed and tested, but not yet called from the request path.',
           ],
           [
+            <M key="v">CONTRACTS_DEPLOY_BLOCK</M>,
+            <span key="d">
+              the profile&apos;s deploy block (<M>44406357</M> on mainnet, <M>52865624</M> on Galileo)
+            </span>,
+            'only for your own contracts',
+            'The block your contracts were deployed in — where every eth_getLogs history read (the activity feed, attestation tx hashes) starts. Inherited from the profile for its own registry; an overridden REGISTRY_CONTRACT_ADDRESS starts at genesis unless this says where it was deployed. scripts/set-deployment.ts records it for a profile.',
+          ],
+          [
             <M key="v">ACTIVITY_LOOKBACK_BLOCKS</M>,
-            <M key="d">50000</M>,
-            'no (has default)',
-            'How far back listRecentActivity scans with eth_getLogs. Larger windows see more history and cost more RPC time; the dashboard caches the result for 30 s.',
+            <span key="d">
+              <M>&apos;&apos;</M> (no cap)
+            </span>,
+            'no',
+            'Optional cap, in blocks back from the head, on how far history reads reach. Leave it unset: both 0G RPCs answer a deploy-to-head eth_getLogs in under a second, and any cap makes the activity feed go blank once the service has been idle longer than it (~0.5 s per block). Only for an RPC that rejects wide getLogs ranges.',
           ],
           [
             <M key="v">GATE_SIGNER_KEY</M>,
@@ -442,7 +461,7 @@ export default function ConfigurationPage() {
         rows={[
           [
             <M key="v">NEXT_PUBLIC_SITE_URL</M>,
-            <M key="d">https://agentgate-0g.mdloglabs.org</M>,
+            <M key="d">https://agentgate.equiflow.xyz</M>,
             'Build-time base URL for the canonical and Open Graph links the dashboard emits. Set it when self-hosting the dashboard under another domain.',
           ],
         ]}
@@ -561,15 +580,17 @@ export default function ConfigurationPage() {
           'UPSTREAM_TIMEOUT_MS=30000\n' +
           'LOG_LEVEL=info                          # debug|info|warn|error\n' +
           'TRUST_PROXY=0                           # trusted reverse-proxy hops (set 1 behind one proxy)\n' +
-          '# --- live mode (0G Galileo Testnet) ---\n' +
-          'ZG_RPC_URL=https://evmrpc-testnet.0g.ai\n' +
-          'ZG_CHAIN_ID=16602\n' +
-          'ZG_NETWORK=0g-galileo\n' +
-          'ZG_EXPLORER_URL=https://chainscan-galileo.0g.ai\n' +
+          '# --- live mode: one profile selects the whole chain identity ---\n' +
+          'ZG_NETWORK_PROFILE=                     # mainnet (default) | galileo\n' +
+          'ZG_RPC_URL=                             # per-value overrides of the profile, normally unset\n' +
+          'ZG_CHAIN_ID=\n' +
+          'ZG_NETWORK=\n' +
+          'ZG_EXPLORER_URL=\n' +
           'REGISTRY_CONTRACT_ADDRESS=\n' +
           'PAYMENT_ROUTER_ADDRESS=\n' +
           'SPEND_GUARD_ADDRESS=\n' +
-          'ACTIVITY_LOOKBACK_BLOCKS=50000\n' +
+          'CONTRACTS_DEPLOY_BLOCK=                 # only with your own contracts: the block they were deployed in\n' +
+          'ACTIVITY_LOOKBACK_BLOCKS=               # leave unset; a cap blanks the feed once the service idles longer than it\n' +
           'GATE_SIGNER_KEY=                        # middleware/attestor key (0x + 64 hex)\n' +
           'BUYER_SIGNER_KEY=                       # buyer key — agent + agentgate buy\n' +
           'SELLER_SIGNER_KEY=                      # CLI / seller key\n' +

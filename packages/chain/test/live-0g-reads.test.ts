@@ -54,7 +54,7 @@ function configFor(registry: string): AgentGateConfig {
   return {
     zgRpcUrl: RPC, zgChainId: 31337, zgNetwork: '0g-galileo',
     registryContractAddress: registry, paymentRouterAddress: '',
-    activityLookbackBlocks: 50_000,
+    contractsDeployBlock: 0, activityLookbackBlocks: null,
   } as unknown as AgentGateConfig;
 }
 

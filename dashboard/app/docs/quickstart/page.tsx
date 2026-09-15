@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   alternates: { canonical: '/docs/quickstart' },
   title: 'Quickstart',
   description:
-    'From a clean clone to a verified register → 402 → pay → serve → attest → score loop in about a minute. Run the offline demo, view it live in the dashboard, then drive your first manual wrap by hand. Mock mode — no testnet keys or network required.',
+    'From a clean clone to a verified register → 402 → pay → serve → attest → score loop in about a minute. Run the offline demo, view it live in the dashboard, then drive your first manual wrap by hand. Mock mode — no keys, no funded wallet, no network required.',
 };
 
 export default function Page() {
@@ -32,8 +32,8 @@ export default function Page() {
 
       <H2 id="see-it-live">See it live in 10 seconds</H2>
       <P>
-        Before installing anything: the hosted gateway is running against 0G Galileo Testnet
-        right now. Ask it for service <M>#1</M> and a real 402 invoice comes back — a fresh{' '}
+        Before installing anything: the hosted gateway is running against 0G Mainnet right now.
+        Ask it for service <M>#1</M> and a real 402 invoice comes back — a fresh{' '}
         <M>nonce</M>, the on-chain price, and the seller&apos;s payment account:
       </P>
       <CodeBlock label="no install required" code={'curl -sS https://0g-gateway.equiflow.xyz/svc/1'} />
@@ -44,18 +44,19 @@ export default function Page() {
           '  "x402Version": 1,',
           '  "error": "X-PAYMENT header is required",',
           '  "accepts": [{',
-          '    "scheme": "exact-settled", "network": "0g-galileo",',
+          '    "scheme": "exact-settled", "network": "0g-mainnet",',
           '    "maxAmountRequired": "1000000000000000",',
-          '    "payTo": "0x19ff…b5f0",',
+          '    "payTo": "0xb678…4eb9",',
           '    "extra": { "nonce": "1542202979977604", "serviceId": 1,',
-          '               "router": "0xbbc1…8005", "settlement": "0g-payment-router" }',
+          '               "router": "0x5102…45eF", "settlement": "0g-payment-router" }',
           '  }]',
           '}',
         ].join('\n')}
       />
       <P>
         Paying that invoice and redeeming the proof is one command —{' '}
-        <M>npx agentgate-0g@latest buy 1</M> (with <M>BUYER_SIGNER_KEY</M> set) — or the{' '}
+        <M>npx agentgate-0g@latest buy 1</M> (with a mainnet-funded <M>BUYER_SIGNER_KEY</M> set; the
+        price is 0.001 OG) — or the{' '}
         <DocLink href="/docs/buyers#plain-curl">three-step curl flow</DocLink>. The rest of this
         page runs the same loop fully offline instead — an in-process mock chain, no keys and no
         faucet needed.
@@ -98,7 +99,8 @@ export default function Page() {
       <Callout tone="info" title="Two modes, one code path">
         <M>AGENTGATE_MODE</M> selects the chain backend behind the <M>ChainClient</M> seam:{' '}
         <M>mock</M> (the in-process devnet used throughout this page, fully offline) or{' '}
-        <M>live</M> (0G Galileo Testnet, which needs a funded signer key — but no API key). The stack
+        <M>live</M> (0G Mainnet by default, Galileo with <M>ZG_NETWORK_PROFILE=galileo</M>; needs a
+        funded signer key — but no API key). The stack
         defaults to <M>mock</M> via <M>loadConfig()</M>, but the <M>agentgate</M> CLI defaults to{' '}
         <M>live</M> — so the manual CLI commands below pass <M>--mode mock</M>. Everything above the
         seam is identical. See <DocLink href="/docs/configuration">Configuration</DocLink>.

@@ -16,6 +16,9 @@ import {
   type ChainClient,
 } from '@agentgate/shared';
 import { createChainClient } from '@agentgate/chain';
+// Relative, not '@/lib/api-types': this file is also compiled from the root
+// tsconfig by e2e/dashboard-api-errors.test.ts, where the '@' alias does not exist.
+import type { NetworkInfo } from '../api-types';
 
 const log = createLogger('dashboard.api');
 
@@ -32,16 +35,59 @@ let cached: ChainHandle | null = null;
  */
 export function getChain(): ChainHandle {
   if (cached) return cached;
+  const config = getConfig();
+  const chain = createChainClient(config);
+  cached = { config, chain };
+  return cached;
+}
+
+let cachedConfig: AgentGateConfig | null = null;
+
+/**
+ * The dashboard's configuration, read once per process. Separate from
+ * `getChain()` so a caller that only needs to KNOW the network (a label, an
+ * explorer link) never constructs a chain client for it.
+ */
+export function getConfig(): AgentGateConfig {
   // `requireStrongAdminToken: false` — the dashboard is READ-ONLY. Every route
   // here is a GET, there is no /admin surface, and nothing in this app ever
   // reads config.adminToken. The guard exists so a live GATEWAY cannot run its
   // admin endpoint on the shipped default; applying it here only means a
   // read-only UI refuses to start (CONFIG_INVALID) over a credential it will
   // never use.
-  const config = loadConfig(process.env, { requireStrongAdminToken: false });
-  const chain = createChainClient(config);
-  cached = { config, chain };
-  return cached;
+  cachedConfig ??= loadConfig(process.env, { requireStrongAdminToken: false });
+  return cachedConfig;
+}
+
+/** Human label for a network name; the machine name is shown when unknown. */
+function networkLabel(network: string, mode: AgentGateConfig['mode']): string {
+  if (mode === 'mock') return 'Mock devnet';
+  switch (network) {
+    case '0g-galileo': return '0G Galileo Testnet';
+    case '0g-mainnet': return '0G Mainnet';
+    default: return network;
+  }
+}
+
+/**
+ * What the UI needs to say WHICH chain it is showing. Resolved from the
+ * process environment at request time so one build serves every instance;
+ * see NetworkInfo. In mock mode there is no explorer, and the address links
+ * render as plain text.
+ */
+export function getNetworkInfo(): NetworkInfo {
+  const config = getConfig();
+  const mock = config.mode === 'mock';
+  return {
+    network: mock ? 'mock' : config.zgNetwork,
+    label: networkLabel(config.zgNetwork, config.mode),
+    chainId: config.zgChainId,
+    explorerUrl: mock ? '' : config.zgExplorerUrl.replace(/\/+$/, ''),
+    registry: config.registryContractAddress,
+    router: config.paymentRouterAddress,
+    spendGuard: config.spendGuardAddress,
+    deployBlock: config.contractsDeployBlock,
+  };
 }
 
 export interface ApiFailure {

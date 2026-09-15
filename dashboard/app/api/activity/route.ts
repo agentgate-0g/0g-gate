@@ -32,6 +32,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const body: ActivityResponse = {
       network: chain.network,
       events,
+      historyFromBlock: config.contractsDeployBlock,
       lookbackBlocks: config.activityLookbackBlocks,
     };
     cache.set(limit, { at: now, body });

@@ -39,7 +39,7 @@ export default function Page() {
         an active flag — and crucially the <em>gateway base URL</em>, not your real upstream.
         Second it <strong className="text-white">maps the upstream on the gateway</strong> by
         signing an ownership challenge with your seller key and POSTing the mapping{' '}
-        (<M>{'{ upstreamUrl, publicKeyHex, timestamp, signatureHex }'}</M>) to{' '}
+        (<M>{'{ upstreamUrl, timestamp, signatureHex }'}</M>) to{' '}
         <M>POST &lt;gateway&gt;/services/&lt;serviceId&gt;/map</M> — no shared admin token. The
         gateway verifies the signature against the on-chain <M>owner</M> before storing it.
         (That is the live flow; a mock-mode wrap instead POSTs{' '}
@@ -84,7 +84,7 @@ export default function Page() {
           [
             <M key="d">live</M>,
             <M key="e">SELLER_SIGNER_KEY</M>,
-            'Your funded 0G Galileo private key — 0x + 64 hex.',
+            'Your funded 0G private key — 0x + 64 hex — holding OG on the network you register on (Mainnet by default; Galileo under ZG_NETWORK_PROFILE=galileo).',
           ],
           [
             <M key="a">mock</M>,
@@ -110,10 +110,13 @@ export default function Page() {
         <M>http://localhost:4021</M>).
       </P>
       <P>
-        No Testnet key yet? Generate one with <M>cast wallet new</M> (or export the private key
-        from any EVM wallet) and fund it at{' '}
-        <M>https://faucet.0g.ai</M> — 0.1 OG per wallet per day. At 0G&apos;s ~4 gwei that is
-        ample: a registration, a pause and a resume together cost a small fraction of one grant.
+        No key yet? Generate one with <M>cast wallet new</M> (or export the private key from any
+        EVM wallet). On Mainnet — the default — fund it with real OG; at 0G&apos;s ~4 gwei a
+        registration, a pause and a resume together cost well under 0.01 OG. To rehearse for free
+        first, set <M>ZG_NETWORK_PROFILE=galileo</M> and fund the same key at{' '}
+        <M>https://faucet.0g.ai</M> (0.1 OG per wallet per day) — the Galileo catalog is served by
+        its own gateway, <M>https://0g-gateway.mdloglabs.org</M>, which <M>wrap</M> then needs as{' '}
+        <M>--gateway</M>.
       </P>
 
       <H2 id="wrap-your-api">Wrap your API</H2>
@@ -221,31 +224,32 @@ export default function Page() {
             ),
           },
           {
-            name: '--payment-target <accountHash>',
+            name: '--payment-target <address>',
             type: 'string',
             required: false,
             default: 'derived from the seller signer',
             desc: (
               <>
-                Account that receives buyer payments, in <M>0x&lt;40 hex&gt;</M> form.
-                Defaults to the account hash derived from your signer. Invalid formats are
-                rejected with <M>INVALID_ACCOUNT_HASH</M>.
+                Address that receives buyer payments, in <M>0x&lt;40 hex&gt;</M> form. Defaults
+                to the address of your signer. Invalid formats are rejected with{' '}
+                <M>INVALID_ADDRESS</M>.
               </>
             ),
           },
           {
-            name: '--attestor <publicKeyHex>',
+            name: '--attestor <address>',
             type: 'string',
             required: false,
-            default: 'the seller signer public key',
+            default: "the gateway's advertised attestor",
             desc: (
               <>
-                0G public key hex allowed to record attestations for this service — set it
-                to the gateway&apos;s signer so the gateway can record attestations (see
-                Pricing, payment target and attestor below). Defaults to your
-                signer&apos;s public key. Must be{' '}
-                <M>01</M>+64 hex (ed25519) or <M>02</M>+66 hex (secp256k1), else{' '}
-                <M>INVALID_PUBLIC_KEY</M>.
+                EVM address allowed to record attestations for this service. By default{' '}
+                <M>wrap</M> asks the gateway who it signs as (<M>GET /healthz</M> advertises{' '}
+                <M>attestor</M>) and registers that, so the gateway that serves your calls can
+                score them; an explicit value that differs from it is accepted with a warning,
+                because the registry then rejects that gateway&apos;s attestations and the score
+                stays 0/0. Falls back to your signer&apos;s address only if the gateway advertises
+                none. Must be <M>0x</M>+40 hex, else <M>INVALID_ADDRESS</M>.
               </>
             ),
           },
@@ -256,7 +260,7 @@ export default function Page() {
         code={[
           'service id:      5',
           'public endpoint: https://0g-gateway.equiflow.xyz/svc/5',
-          'dashboard:       https://agentgate-0g.mdloglabs.org/services/5',
+          'dashboard:       https://agentgate.equiflow.xyz/services/5',
           'register tx:     <txHash>',
         ].join('\n')}
       />
@@ -273,16 +277,16 @@ export default function Page() {
           'HTTP/2 402',
           '',
           '{"x402Version":1,"error":"X-PAYMENT header is required",',
-          ' "accepts":[{"scheme":"exact-settled","network":"0g-galileo","maxAmountRequired":"2500000000000000000",',
-          '   "asset":"OG","payTo":"0x…","resource":"https://0g-gateway.equiflow.xyz/svc/1",',
-          '   …,"extra":{"nonce":"…","serviceId":1,"router":"0x…",…}}]}',
+          ' "accepts":[{"scheme":"exact-settled","network":"0g-mainnet","maxAmountRequired":"2500000000000000000",',
+          '   "asset":"OG","payTo":"0x…","resource":"https://0g-gateway.equiflow.xyz/svc/5",',
+          '   …,"extra":{"nonce":"…","serviceId":5,"router":"0x5102…45eF",…}}]}',
         ].join('\n')}
       />
       <P>
         Then confirm the registration transaction on the explorer at{' '}
-        <M>https://chainscan-galileo.0g.ai/tx/&lt;txHash&gt;</M> and read the record back
-        from the chain with <M>npx agentgate-0g@latest status 1</M> (substitute the id wrap
-        printed).
+        <M>https://chainscan.0g.ai/tx/&lt;txHash&gt;</M> (<M>chainscan-galileo.0g.ai</M> on the
+        testnet) and read the record back from the chain with{' '}
+        <M>npx agentgate-0g@latest status 5</M> (substitute the id wrap printed).
       </P>
 
       <H2 id="under-the-hood">What happens under the hood</H2>
@@ -312,7 +316,7 @@ export default function Page() {
             body: (
               <>
                 The CLI signs an ownership challenge with your seller key and POSTs{' '}
-                <M>{'{ upstreamUrl, publicKeyHex, timestamp, signatureHex }'}</M> to{' '}
+                <M>{'{ upstreamUrl, timestamp, signatureHex }'}</M> to{' '}
                 <M>&lt;gateway&gt;/services/&lt;id&gt;/map</M>. The gateway checks the signature
                 against the on-chain owner (plus freshness and SSRF) — this is the only step that
                 knows your real upstream.
@@ -377,8 +381,8 @@ export default function Page() {
 
       <H2 id="pricing-payment-attestor">Pricing, payment target and attestor</H2>
       <P>
-        <M>--price</M> is a decimal OG string converted to wei (1 mote = 1e-9 OG). It must
-        be strictly positive and use at most 9 decimal places; all comparisons use bigint math,
+        <M>--price</M> is a decimal OG string converted to wei (1 OG = 1e18 wei). It must be
+        strictly positive and use at most 18 decimal places; all comparisons use bigint math,
         never floats. Buyers pay in <strong className="text-white">native OG</strong> by calling{' '}
         <M>PaymentRouter.pay</M>, which forwards the whole amount straight to your{' '}
         <M>paymentTarget</M> — the gateway never holds or forwards funds, it only verifies the
@@ -413,8 +417,8 @@ export default function Page() {
 
       <H2 id="going-live">Going live</H2>
       <P>
-        Live mode (<M>AGENTGATE_MODE=live</M>) targets 0G Galileo Testnet and adds two hard
-        requirements:
+        Live mode (<M>AGENTGATE_MODE=live</M>) targets 0G — Mainnet by default, real OG — and adds
+        two hard requirements:
       </P>
       <DocTable
         head={['Requirement', 'Why']}

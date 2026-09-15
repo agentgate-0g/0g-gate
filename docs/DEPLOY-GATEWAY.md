@@ -115,11 +115,32 @@ uses **PM2** (its daemon already runs), so the gateway + dashboard are defined i
 `deploy/agentgate.ecosystem.config.cjs` and started with:
 
 ```bash
-pm2 start deploy/agentgate.ecosystem.config.cjs   # agentgate-0g-gateway + agentgate-0g-dashboard
+pm2 start deploy/agentgate.ecosystem.config.cjs   # four apps: gateway + dashboard, each for mainnet and for galileo
 pm2 save                                           # persist across reboot (pm2 startup is configured)
 pm2 status ; pm2 logs agentgate-0g-gateway
-curl -s http://127.0.0.1:16021/healthz              # {"ok":true,"network":"0g-galileo"}
+curl -s http://127.0.0.1:16021/healthz              # mainnet gateway  — 0g-gateway.equiflow.xyz
+curl -s http://127.0.0.1:16022/healthz              # galileo gateway  — 0g-gateway.mdloglabs.org
+curl -s http://127.0.0.1:13000/api/network          # mainnet dashboard — agentgate.equiflow.xyz
+curl -s http://127.0.0.1:13001/api/network          # galileo dashboard — no hostname
 ```
+
+Since 2026-09-15 the public hosts serve **0G Mainnet**; Galileo runs beside it
+under `ZG_NETWORK_PROFILE=galileo` (`agentgate-0g-gateway-galileo`,
+`agentgate-0g-dashboard-galileo`). The dashboard is built once
+(`npm run build -w dashboard`) and started twice: the network is resolved from
+the environment on every request, so the two dashboard apps differ only by the
+profile. Each gateway keeps its own invoice, attestation and upstream files
+(`data/gateway-mainnet-*.json` vs the original Galileo paths) — service ids
+start at 1 on every chain, so they must never share one.
+
+**Rebuild, then restart — never the reverse.** `next start` holds the build's
+chunk manifest in memory; rebuilding `.next` under a running server leaves it
+serving HTML that references chunks the rebuild replaced, and every client-side
+navigation then trips the error boundary ("This page failed to render").
+`npm run build -w dashboard && pm2 restart agentgate-0g-dashboard agentgate-0g-dashboard-galileo`.
+
+The tunnel's hostname → port mapping is managed in Cloudflare, not in this
+repo. The ports above are what it points at today; change them only together.
 
 Two names and one port in there are not interchangeable:
 

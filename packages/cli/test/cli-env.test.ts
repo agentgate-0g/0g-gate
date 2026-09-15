@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_REGISTRY_ADDRESS } from '@agentgate/shared';
+import { DEFAULT_REGISTRY_ADDRESS, NETWORK_PROFILES, loadConfig } from '@agentgate/shared';
 import { resolveCliEnv } from '../src/cli-env';
 
 describe('resolveCliEnv', () => {
-  it('defaults an empty env to live mode + the deployed registry address', () => {
+  it('defaults an empty env to live mode and leaves the registry to the profile', () => {
     const out = resolveCliEnv({}, {});
     expect(out.AGENTGATE_MODE).toBe('live');
-    expect(out.REGISTRY_CONTRACT_ADDRESS).toBe(DEFAULT_REGISTRY_ADDRESS);
+    // No CLI-side registry default: injecting one here used to override the
+    // network profile, so a profile switch read the wrong chain's address.
+    expect(out.REGISTRY_CONTRACT_ADDRESS).toBeUndefined();
+    expect(loadConfig(out, { requireStrongAdminToken: false }).registryContractAddress).toBe(DEFAULT_REGISTRY_ADDRESS);
+    expect(
+      loadConfig({ ...out, ZG_NETWORK_PROFILE: 'galileo' }, { requireStrongAdminToken: false }).registryContractAddress,
+    ).toBe(NETWORK_PROFILES.galileo!.registry);
   });
 
   it('lets process.env override the built-in defaults', () => {

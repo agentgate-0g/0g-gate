@@ -4,11 +4,11 @@ Wrap any HTTP API into a **paid HTTP 402 service on 0G** — micropayments in na
 
 Wire format is the **x402 V1 envelope** (`accepts[]`, `X-PAYMENT`, `X-PAYMENT-RESPONSE`). Settlement is **not** x402's `exact` scheme and does not claim to be: the scheme is `exact-settled`, meaning the buyer settles on-chain first and presents the tx hash, rather than signing an authorization for a facilitator to submit. 0G has no x402 facilitator, so there is no third party in the money path.
 
-Services carry an on-chain **`accepts[]` price list**, so a service can advertise more than one payment asset. The shipped rail is **native OG only**: every payment settles by calling `PaymentRouter.pay(serviceId, nonce, payTo)` on 0G Galileo, which binds the x402 invoice nonce to the payment on-chain.
+Services carry an on-chain **`accepts[]` price list**, so a service can advertise more than one payment asset. The shipped rail is **native OG only**: every payment settles by calling `PaymentRouter.pay(serviceId, nonce, payTo)` on 0G, which binds the x402 invoice nonce to the payment on-chain.
 
 ## Read the live catalog — zero setup
 
-The read commands run against 0G Galileo Testnet with **no configuration, no keys, and no API key** — every read is a public-RPC view call:
+The read commands run against **0G Mainnet** with **no configuration, no keys, and no API key** — every read is a public-RPC view call (set `ZG_NETWORK_PROFILE=galileo` for the Galileo testnet catalog):
 
 ```bash
 npx agentgate-0g list        # on-chain service catalog with scores + trust tiers
@@ -17,12 +17,14 @@ npx agentgate-0g status 3    # one service: record, price, trust, attestations
 
 ## Wrap your API (writes)
 
-`wrap` registers your service **on 0G Galileo Testnet** and drops a 402 paywall in front of it — one line, the only thing besides the args is your funded wallet key:
+`wrap` registers your service **on 0G Mainnet** (real OG for gas) and drops a 402 paywall in front of it — one line, the only thing besides the args is your funded wallet key:
 
 ```bash
-export SELLER_SIGNER_KEY=0x…   # 32-byte hex private key, funded at https://faucet.0g.ai
+export SELLER_SIGNER_KEY=0x…   # 32-byte hex private key holding a little OG on 0G Mainnet (~0.002 OG covers the registration)
 npx agentgate-0g wrap https://api.example.com/gold --price 2.5 --name "Gold Spot Feed"
 ```
+
+To try it without real OG first, register on the testnet instead: `ZG_NETWORK_PROFILE=galileo` (fund the key at https://faucet.0g.ai) and `--gateway https://0g-gateway.mdloglabs.org`, the hosted Galileo gateway.
 
 It signs the on-chain registration with that key, then maps your upstream on the gateway by **signing an ownership challenge (EIP-191) with the same key** — no shared admin token. `--gateway` defaults to the hosted gateway; pass it to target a local or self-hosted one. (A key is irreducible: registering on-chain is a signed, gas-paying transaction.)
 
@@ -31,7 +33,7 @@ It signs the on-chain registration with that key, then maps your upstream on the
 `buy` runs the whole 402 exchange for you: fetch the `402` invoice, pay it by calling **`PaymentRouter.pay(serviceId, nonce, payTo)`** with the invoice's price as `msg.value`, retry with the `X-PAYMENT` proof, and print the result — response body on **stdout** (pipeable), payment receipt on **stderr**:
 
 ```bash
-export BUYER_SIGNER_KEY=0x…
+export BUYER_SIGNER_KEY=0x…   # pays the listed price in OG on 0G Mainnet (list prices are 0.0005–0.002 OG per call)
 npx agentgate-0g buy 3 --max 5
 ```
 
@@ -79,8 +81,9 @@ Every config value can be given as a flag **or** an env var; precedence is **fla
 | Flag | Env var | Needed for |
 |---|---|---|
 | `--mode <mock\|live>` | `AGENTGATE_MODE` | all (CLI defaults to `live`) |
-| `--rpc-url <url>` | `ZG_RPC_URL` | all (defaults to `https://evmrpc-testnet.0g.ai`) |
-| `--registry <address>` | `REGISTRY_CONTRACT_ADDRESS` | all (defaults to the deployed registry) |
+| `--rpc-url <url>` | `ZG_RPC_URL` | all (defaults to the selected profile's: `https://evmrpc.0g.ai` on mainnet) |
+| `--registry <address>` | `REGISTRY_CONTRACT_ADDRESS` | all (defaults to the selected profile's deployed registry) |
+| — | `ZG_NETWORK_PROFILE` | all (`mainnet`, the default, or `galileo` — selects RPC, chain id, explorer and all contract addresses as one unit) |
 | `--gateway <url>` | — | wrap, map (default to the hosted gateway in live) · buy (defaults to the service's on-chain endpoint) |
 | `--key <0xhex>` | `SELLER_SIGNER_KEY` (wrap/map/pause/resume) · `BUYER_SIGNER_KEY` (buy/mcp) | live writes — your wallet key |
 | `--max <og>` | — | buy: refuse invoices priced above this many OG |
@@ -106,5 +109,5 @@ On an invalid value the CLI fails fast with a clear one-line message (e.g. `erro
 ## Notes
 
 - Node ≥ 22 required.
-- Network: 0G Galileo Testnet (chain id `16602`) · explorer <https://chainscan-galileo.0g.ai> · faucet <https://faucet.0g.ai>
+- Network: 0G Mainnet (chain id `16661`) · explorer <https://chainscan.0g.ai>. Testnet: `ZG_NETWORK_PROFILE=galileo` → 0G Galileo (chain id `16602`) · explorer <https://chainscan-galileo.0g.ai> · faucet <https://faucet.0g.ai>
 - Source: https://github.com/agentgate-0g/0g-gate

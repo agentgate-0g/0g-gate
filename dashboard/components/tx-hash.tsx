@@ -1,6 +1,7 @@
-import { truncateHash, truncateMiddle } from '@/lib/format';
+'use client';
 
-const EXPLORER = 'https://chainscan-galileo.0g.ai';
+import { truncateHash, truncateMiddle } from '@/lib/format';
+import { useNetwork } from '@/components/network-context';
 
 const TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/;
 const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/;
@@ -11,7 +12,9 @@ const LINK_CLASS =
 /**
  * Tx hash rendering:
  * - mock network → plain mono text (nothing to link to)
- * - live network → link to https://chainscan-galileo.0g.ai/tx/<hash>
+ * - live network → link to <explorer>/tx/<hash>, the explorer of the chain
+ *   this instance reads (see NetworkProvider) — never a hard-coded host, or the
+ *   mainnet instance would send every hash to the testnet explorer
  */
 export function TxHash({
   hash,
@@ -22,11 +25,12 @@ export function TxHash({
   network: string;
   className?: string;
 }) {
+  const { explorerUrl } = useNetwork();
   const label = truncateHash(hash);
   const base = `font-mono text-xs ${className}`;
   // Only build an explorer link for a well-formed 0x + 64-hex tx hash; anything
   // else (mock network, or a malformed on-chain value) renders as plain text.
-  if (network === 'mock' || !TX_HASH_RE.test(hash)) {
+  if (network === 'mock' || explorerUrl === '' || !TX_HASH_RE.test(hash)) {
     return (
       <code title={hash} className={`${base} text-mut`}>
         {label}
@@ -35,7 +39,7 @@ export function TxHash({
   }
   return (
     <a
-      href={`${EXPLORER}/tx/${encodeURIComponent(hash)}`}
+      href={`${explorerUrl}/tx/${encodeURIComponent(hash)}`}
       target="_blank"
       rel="noopener noreferrer"
       title={hash}
@@ -52,7 +56,7 @@ export function TxHash({
 /**
  * Address rendering, the sibling of TxHash:
  * - mock network → plain mono text (mock addresses exist on no explorer)
- * - live network → link to https://chainscan-galileo.0g.ai/address/<addr>
+ * - live network → link to <explorer>/address/<addr>
  */
 export function AddressLink({
   address,
@@ -67,9 +71,10 @@ export function AddressLink({
   tail?: number;
   className?: string;
 }) {
+  const { explorerUrl } = useNetwork();
   const label = truncateMiddle(address, lead, tail);
   const base = `font-mono text-xs ${className}`;
-  if (network === 'mock' || !ADDRESS_RE.test(address)) {
+  if (network === 'mock' || explorerUrl === '' || !ADDRESS_RE.test(address)) {
     return (
       <code title={address} className={`${base} text-mut`}>
         {label}
@@ -78,7 +83,7 @@ export function AddressLink({
   }
   return (
     <a
-      href={`${EXPLORER}/address/${encodeURIComponent(address)}`}
+      href={`${explorerUrl}/address/${encodeURIComponent(address)}`}
       target="_blank"
       rel="noopener noreferrer"
       title={address}

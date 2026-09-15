@@ -77,7 +77,7 @@ export default function Page() {
                 one <M>PaymentRequirements</M> entry.
               </>
             ),
-            code: 'HTTP/1.1 402 Payment Required\nContent-Type: application/json\n\n{"x402Version":1,"error":"X-PAYMENT header is required","accepts":[{"scheme":"exact-settled","network":"0g-galileo",...}]}',
+            code: 'HTTP/1.1 402 Payment Required\nContent-Type: application/json\n\n{"x402Version":1,"error":"X-PAYMENT header is required","accepts":[{"scheme":"exact-settled","network":"0g-mainnet",...}]}',
           },
           {
             title: 'Pay through the PaymentRouter contract',
@@ -100,7 +100,7 @@ export default function Page() {
                 After a settle delay the buyer client retries the same request with the{' '}
                 <M>X-PAYMENT</M> header — a base64-encoded{' '}
                 <M>PaymentPayload</M>: <M>x402Version:1</M>, <M>scheme:"exact-settled"</M>,{' '}
-                <M>network:"0g-galileo"</M>, and <M>payload.transaction</M> (the tx hash),{' '}
+                <M>network:"0g-mainnet"</M> (or <M>"0g-galileo"</M>), and <M>payload.transaction</M> (the tx hash),{' '}
                 <M>payload.nonce</M> (the nonce), <M>payload.from</M> (optional — ignored by
                 the gateway; payer identity is read from the on-chain <M>Paid</M> log).
               </>
@@ -187,19 +187,19 @@ export default function Page() {
           '  "accepts": [',
           '    {',
           '      "scheme": "exact-settled",',
-          '      "network": "0g-galileo",',
+          '      "network": "0g-mainnet",',
           '      "maxAmountRequired": "1000000000000000",',
           '      "asset": "OG",',
-          '      "payTo": "0x19ff...b5f0",',
+          '      "payTo": "0xb678...4eb9",',
           '      "resource": "https://0g-gateway.equiflow.xyz/svc/1",',
-          '      "description": "RWA FX & Gold Oracle",',
-          '      "maxTimeoutSeconds": 600,',
+          '      "description": "USD FX Feed",',
+          '      "maxTimeoutSeconds": 300,',
           '      "extra": {',
           '        "nonce": "4521903117755646",',
           '        "serviceId": 1,',
           '        "expiresAtMs": 1782966672306,',
           '        "settlement": "0g-payment-router",',
-          '        "router": "0xbbc1...8005",',
+          '        "router": "0x5102...45eF",',
           '        "nonceEncoding": "uint256-decimal"',
           '      }',
           '    }',
@@ -325,7 +325,7 @@ export default function Page() {
             required: true,
             desc: (
               <>
-                Chain name — <M>mock</M> or <M>0g-galileo</M>. The client throws{' '}
+                Chain name — <M>mock</M>, <M>0g-mainnet</M> or <M>0g-galileo</M>. The client throws{' '}
                 <M>NETWORK_MISMATCH</M> if no entry matches its own network.
               </>
             ),
@@ -372,8 +372,9 @@ export default function Page() {
             desc: (
               <>
                 <M>INVOICE_TTL_MS / 1000</M> — deadline in seconds from issuance. The default{' '}
-                <M>INVOICE_TTL_MS</M> is 300000 ms; the hosted gateway runs 600000, so live
-                responses show <M>600</M>.
+                <M>INVOICE_TTL_MS</M> is 300000 ms, which the hosted gateway keeps, so live
+                responses show <M>300</M>. The cap is <M>MAX_INVOICE_TTL_MS</M> (13 minutes), so a
+                quote can never outlive the registry&apos;s 15-minute terms-change delay.
               </>
             ),
           },
@@ -475,7 +476,7 @@ export default function Page() {
             'request (retry)',
             <>
               base64(JSON): <M>x402Version:1</M>, <M>scheme:"exact-settled"</M>,{' '}
-              <M>network:"0g-galileo"</M>, <M>payload.transaction</M> (tx hash),{' '}
+              <M>network:"0g-mainnet"</M> (or <M>"0g-galileo"</M>), <M>payload.transaction</M> (tx hash),{' '}
               <M>payload.nonce</M> (nonce), <M>payload.from</M> (optional, ignored — the
               gateway derives the payer from the transfer itself; the reference client omits it).
             </>,

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { DEFAULT_REGISTRY_ADDRESS } from '@agentgate/shared';
+import { NETWORK_PROFILES } from '@agentgate/shared';
 import { CommandBlock } from '@/components/copy';
 import {
   Callout,
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   alternates: { canonical: '/docs/contract' },
   title: 'Smart contracts',
   description:
-    'Reference for the AgentGate Solidity contracts on 0G Galileo: AgentGateRegistry (service registry + attestation reputation), PaymentRouter (invoice-bound payments) and SpendGuard (x402 spend-firewall escrow) — storage, entrypoints, events, custom errors, and build/deploy.',
+    'Reference for the AgentGate Solidity contracts on 0G Mainnet and Galileo: AgentGateRegistry (service registry + attestation reputation), PaymentRouter (invoice-bound payments) and SpendGuard (x402 spend-firewall escrow) — storage, entrypoints, events, custom errors, and build/deploy.',
 };
 
 export default function Page() {
@@ -28,7 +28,7 @@ export default function Page() {
       <DocHeader
         kicker="REFERENCE"
         title="Smart contracts"
-        lede="The on-chain layer of AgentGate on 0G Galileo Testnet: three Solidity contracts — AgentGateRegistry and PaymentRouter (both wired into the product) and SpendGuard (implemented and tested, not yet wired in)."
+        lede="The on-chain layer of AgentGate, deployed byte-identically on 0G Mainnet and 0G Galileo: three Solidity contracts — AgentGateRegistry and PaymentRouter (both wired into the product) and SpendGuard (implemented and tested, not yet wired in)."
       />
 
       <H2 id="overview">Overview</H2>
@@ -54,7 +54,8 @@ export default function Page() {
             <M key="c">AgentGateRegistry</M>,
             'Service discovery catalog + per-service payment-attestation reputation ledger.',
             <span key="st">
-              Wired into the off-chain product (the live registry client). 21 Foundry tests.
+              Wired into the off-chain product (the live registry client). 71 Foundry tests, plus
+              the boundary and invariant suites.
             </span>,
           ],
           [
@@ -62,13 +63,13 @@ export default function Page() {
             'Binds an x402 invoice nonce to an on-chain payment, and rejects a replay of it.',
             <span key="st">
               Wired in: the gateway advertises it as <M>extra.router</M> and verifies against its{' '}
-              <M>Paid</M> logs. 9 Foundry tests.
+              <M>Paid</M> logs. 9 Foundry tests, plus the deploy-script suite.
             </span>,
           ],
           [
             <M key="c">SpendGuard</M>,
             'x402 spend-firewall: per-policy OG escrow with on-chain budget, per-call cap, rate-window and trust-tier enforcement.',
-            'Implemented and tested only (12 Foundry tests) — NOT integrated into the running product (no off-chain client, middleware never calls debit).',
+            'Implemented and tested only (37 Foundry tests plus a solvency invariant) — NOT integrated into the running product (no off-chain client, middleware never calls debit).',
           ],
         ]}
       />
@@ -545,7 +546,7 @@ export default function Page() {
       <CommandBlock text="cd contracts-evm && forge install foundry-rs/forge-std@v1.16.2 --no-git --shallow" />
       <CommandBlock text="cd contracts-evm && forge test" />
       <P>
-        Runs all 42 tests, in-process, with no node and no network. They cover: registration
+        Runs all 143 tests across nine suites, in-process, with no node and no network. They cover: registration
         validation (empty/whitespace name, sub-floor price, empty <M>accepts</M>), 1-based id
         assignment and <M>servicesCount</M>, default reads for unknown ids, attestor-or-owner auth
         (strangers revert), the per-service duplicate guard (and that it really is per-service), the
@@ -554,7 +555,9 @@ export default function Page() {
         rejected), <M>PaymentRouter</M>&rsquo;s checks-effects-interactions ordering — a failed
         transfer leaves the nonce unburned, so the invoice stays payable — and every one of{' '}
         <M>SpendGuard.debit</M>&rsquo;s ordered revert checks plus its rate-window pruning
-        (all-kept, all-pruned, and partial-prune branches).
+        (all-kept, all-pruned, and partial-prune branches) — plus a boundaries suite at every
+        numeric limit, two stateful invariants (the score ledger and SpendGuard solvency) and a
+        test of the deploy script itself.
       </P>
       <CommandBlock text="cd contracts-evm && forge build" />
       <P>
@@ -564,25 +567,31 @@ export default function Page() {
         so there is no size-related deploy risk.
       </P>
       <Callout tone="ok" title="ALREADY DEPLOYED — THIS IS THE RECIPE">
-        The contracts are already live on 0G Galileo — <M>AgentGateRegistry</M> at{' '}
-        <M>{DEFAULT_REGISTRY_ADDRESS}</M> — and what follows is the runbook that
-        produced them, kept so the deploy is reproducible on a key of your own. Deploying all three
-        costs roughly{' '}
-        <strong>0.014 OG</strong> at 0G&rsquo;s ~4 gwei — comfortably inside a single day&rsquo;s
-        faucet grant from{' '}
+        The contracts are already live on both 0G networks — on Mainnet <M>AgentGateRegistry</M>{' '}
+        is <M>{NETWORK_PROFILES.mainnet!.registry}</M> (block 44406357), on Galileo{' '}
+        <M>{NETWORK_PROFILES.galileo!.registry}</M> (block 52865624), byte-identical and
+        source-verified on both explorers — and what follows is the runbook that produced them,
+        kept so the deploy is reproducible on a key of your own. Deploying all three costs{' '}
+        <strong>0.0196 OG</strong> (4,900,008 gas at 0G&rsquo;s ~4 gwei) on either network. On
+        Galileo that is comfortably inside a single day&rsquo;s grant from{' '}
         <a href="https://faucet.0g.ai" target="_blank" rel="noopener noreferrer" className="text-accent underline underline-offset-4 hover:text-white">faucet.0g.ai</a>{' '}
-        (0.1 OG per wallet per day), so there is no need to split it across two days. The full
-        runbook — including the free Anvil-fork rehearsal and the post-deploy verification
-        checklist — is in <M>contracts-evm/README.md</M> and <M>docs/DEPLOY.md</M>.
+        (0.1 OG per wallet per day); on Mainnet it is real OG, and note that no external audit has
+        been performed on these contracts. The full runbook — including the free Anvil-fork
+        rehearsal and the post-deploy verification checklist — is in{' '}
+        <M>contracts-evm/README.md</M> and <M>docs/DEPLOY.md</M>.
       </Callout>
       <CommandBlock
         wrap
-        text={'cd contracts-evm && forge script script/Deploy.s.sol:Deploy --rpc-url https://evmrpc-testnet.0g.ai --private-key "$DEPLOYER_KEY" --broadcast'}
+        text={'cd contracts-evm && forge script script/Deploy.s.sol:Deploy --rpc-url https://evmrpc.0g.ai --private-key "$DEPLOYER_KEY" --broadcast'}
       />
       <P>
-        The script prints three lines to paste into the root <M>.env</M>. None of the contracts are
-        upgradable — there is no proxy, so a &ldquo;redeploy&rdquo; is a fresh address starting from
-        empty state (<M>servicesCount == 0</M>, no attestation history).
+        (<M>--rpc-url https://evmrpc-testnet.0g.ai</M> for Galileo.) The script prints three lines
+        to paste into the root <M>.env</M> — or, for a deployment the whole stack should default to,
+        record it as a profile with <M>scripts/set-deployment.ts</M>, which verifies the addresses,
+        their wiring, their ABI shape and their creation block against the chain before writing
+        them. None of the contracts are upgradable — there is no proxy, so a &ldquo;redeploy&rdquo;
+        is a fresh address starting from empty state (<M>servicesCount == 0</M>, no attestation
+        history).
       </P>
       <CodeBlock
         label="root .env"

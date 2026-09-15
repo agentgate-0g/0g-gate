@@ -142,8 +142,8 @@ export default function Page() {
         <M>@agentgate/middleware</M> package) and, in live mode, the chain plumbing. The operator
         sets the admin token, the SSRF policy on upstream URLs, and the chain backend, and points{' '}
         <M>REGISTRY_CONTRACT_ADDRESS</M> at a deployed <M>AgentGateRegistry</M> before going
-        live — on 0G Galileo Testnet the contract is already deployed, so most operators just set the
-        hash (deploying your own registry is covered in{' '}
+        live — on both 0G networks the contract is already deployed and compiled in as the default, so
+        most operators set nothing (deploying your own registry is covered in{' '}
         <DocLink href="/docs/contract">Smart contracts</DocLink>). See{' '}
         <DocLink href="/docs/deployment">Deploy to production</DocLink>.
       </P>
@@ -156,7 +156,7 @@ export default function Page() {
         the seam is identical, so you build and test offline and flip one flag to go on-chain.
       </P>
       <DocTable
-        head={['Concern', 'mock (default)', 'live (0G Galileo Testnet)']}
+        head={['Concern', 'mock (default)', 'live (0G Mainnet by default; Galileo via ZG_NETWORK_PROFILE=galileo)']}
         rows={[
           [
             'Chain backend',
@@ -193,13 +193,14 @@ export default function Page() {
         <M>REGISTRY_CONTRACT_ADDRESS</M> and <M>PAYMENT_ROUTER_ADDRESS</M>. It requires{' '}
         <strong className="text-white">no API key of any kind</strong> — every read is a
         public-RPC view call. The contracts are{' '}
-        <strong className="text-white">deployed on 0G Galileo</strong> and the CLI and gateway
-        default to them, so these are only needed to point at your own deployment; with the
+        <strong className="text-white">deployed on 0G Mainnet and on 0G Galileo</strong> and the CLI
+        and gateway default to the mainnet set (<M>ZG_NETWORK_PROFILE=galileo</M> selects the
+        testnet set), so these are only needed to point at your own deployment; with the
         addresses unset the gateway answers <M>CONTRACT_NOT_DEPLOYED</M> (503). See{' '}
         <DocLink href="/docs/contract">Smart contracts</DocLink>. These prerequisites apply only
         when you run the gateway/stack yourself — the public gateway is already hosted at{' '}
-        <M>https://0g-gateway.equiflow.xyz</M>, and the published CLI defaults the registry hash and
-        reads 0G Galileo Testnet with no keys.
+        <M>https://0g-gateway.equiflow.xyz</M> (0G Mainnet), and the published CLI defaults the
+        registry address and reads 0G Mainnet with no keys.
       </Callout>
 
       <H2 id="get-started">Get started</H2>
@@ -256,7 +257,7 @@ export default function Page() {
           {
             href: '/docs/deployment',
             title: 'Deploy to production',
-            desc: 'Host the dashboard, gateway, and oracle; configure live-mode guardrails; and set REGISTRY_CONTRACT_ADDRESS to connect to the live AgentGateRegistry on 0G Galileo Testnet.',
+            desc: 'Host the dashboard, gateway, and oracle; configure live-mode guardrails; and pick the network with ZG_NETWORK_PROFILE (mainnet by default, galileo for the testnet) — or set REGISTRY_CONTRACT_ADDRESS to connect to your own AgentGateRegistry.',
           },
         ]}
       />

@@ -200,4 +200,4 @@ Stated plainly so nobody is surprised by a question:
   key present is the service's own payout address — a self-payment is served but never attested, so
   the score would visibly fail to move. Scene 4 uses the mock chain and says so; Scene 5 carries the
   real on-chain proof. To add a live buy, follow `DEMO_RUNBOOK.md` §4 and re-record Scene 4.
-- **The hosted Casper dashboard.** `agentgate.mdloglabs.org` without the `0g-` prefix is a separate, older deployment and must not appear (`DEMO_RUNBOOK.md` §0). The 0G one is `agentgate-0g.mdloglabs.org`.
+- **The hosted Casper dashboard.** `agentgate.mdloglabs.org` without the `0g-` prefix is a separate, older deployment and must not appear (`DEMO_RUNBOOK.md` §0). The 0G one is `agentgate.equiflow.xyz`.

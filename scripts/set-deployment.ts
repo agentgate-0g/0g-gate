@@ -3,7 +3,7 @@
  * against the chain itself, that the addresses are what they claim to be.
  *
  *   npx tsx scripts/set-deployment.ts --network galileo \
- *     --registry 0x… --router 0x… --guard 0x…
+ *     --registry 0x… --router 0x… --guard 0x… [--deploy-tx <hash>[,<hash>…]]
  *
  * WHY THIS IS A SCRIPT AND NOT THREE EDITS
  *
@@ -33,8 +33,19 @@
  * and gets debugged as one. Alongside the check, this records `abiHashes`, so
  * e2e/registry-abi-pin.test.ts can fail the NEXT drift offline, on the commit
  * that causes it, instead of on the dashboard days later.
+ *
+ * It also records `deployBlock`: the block the first of the three contracts
+ * was created in. Every eth_getLogs history read starts there (see
+ * NetworkProfile.deployBlock), and a block too HIGH silently hides the
+ * deployment's earliest events, so it is taken from evidence the chain itself
+ * keeps: the receipts of the transactions that created the contracts, found in
+ * the Foundry broadcast artifact for the chain (or given as --deploy-tx) and
+ * re-read from the node. Receipts are chain data and outlive state — the
+ * mainnet RPC prunes state after ~100 blocks, so an eth_getCode search (the
+ * fallback, for an address whose creating tx is unknown) works there only in
+ * the first minute after a deploy.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { createPublicClient, http, getAddress, type Abi, type Address } from 'viem';
@@ -89,15 +100,10 @@ const profileRe = new RegExp(`${network}:\\s*\\{[\\s\\S]*?\\n  \\},`);
 const profileBlock = profileRe.exec(source)?.[0];
 if (!profileBlock) die(`could not find the "${network}" profile in ${CONFIG}`);
 
-const chainId = Number(
-  network === 'galileo'
-    ? /DEFAULT_ZG_CHAIN_ID = (\d+)/.exec(source)?.[1]
-    : /chainId:\s*(\d+)/.exec(profileBlock)?.[1],
-);
-const rpcUrl =
-  network === 'galileo'
-    ? /DEFAULT_ZG_RPC_URL = '([^']+)'/.exec(source)?.[1]
-    : /rpcUrl:\s*'([^']+)'/.exec(profileBlock)?.[1];
+// Every profile carries its own literals (the exported DEFAULT_* names are
+// derived from whichever profile is the default), so both are read the same way.
+const chainId = Number(/chainId:\s*(\d+)/.exec(profileBlock)?.[1]);
+const rpcUrl = /rpcUrl:\s*'([^']+)'/.exec(profileBlock)?.[1];
 if (!Number.isInteger(chainId) || !rpcUrl) die(`could not read chainId/rpcUrl for "${network}"`);
 
 console.log(`\n  network  ${network}  (chain ${chainId})`);
@@ -172,51 +178,152 @@ for (const { key, abi } of CONTRACTS) {
   }
   hashes[key] = abiHash(abi);
 }
-console.log(`  ok   all three deployments dispatch every function in abi.ts\n`);
+console.log(`  ok   all three deployments dispatch every function in abi.ts`);
+
+// --- (6) where the history starts ---------------------------------------------
+// Evidence, in order of preference:
+//   a) the RECEIPTS of the creating transactions. `eth_getTransactionReceipt`
+//      is chain data every node keeps, and its `contractAddress` and
+//      `blockNumber` are exact. The hashes come from the Foundry broadcast
+//      artifact for this chain, or from `--deploy-tx` by hand.
+//   b) a search over `eth_getCode`, galloping backwards from the head and
+//      bisecting — for an address whose creating tx is unknown. "Code at block
+//      b" is monotonic, so the search is exact wherever the node still HOLDS
+//      the state; the mainnet RPC prunes it after ~100 blocks.
+// The three are deployed in dependency order and usually in one block; the
+// EARLIEST is the floor, since a `Paid` log can precede the registry that
+// later attests it.
+const BROADCAST_DIR = path.join(ROOT, 'contracts-evm/broadcast/Deploy.s.sol', String(chainId));
+
+/** Creation tx hashes the broadcast artifacts record for any of the three addresses. */
+function artifactTxHashes(): string[] {
+  if (!existsSync(BROADCAST_DIR)) return [];
+  const wanted = new Set(Object.values(addrs).map((a) => a.toLowerCase()));
+  const hashes = new Set<string>();
+  for (const file of readdirSync(BROADCAST_DIR)) {
+    if (!file.endsWith('.json')) continue; // dry-run/ is a directory; skip it
+    let parsed: { receipts?: { contractAddress?: string | null; transactionHash?: string }[]; transactions?: { contractAddress?: string | null; hash?: string | null }[] };
+    try {
+      parsed = JSON.parse(readFileSync(path.join(BROADCAST_DIR, file), 'utf8'));
+    } catch {
+      continue;
+    }
+    for (const r of parsed.receipts ?? []) {
+      if (r.contractAddress && r.transactionHash && wanted.has(r.contractAddress.toLowerCase())) hashes.add(r.transactionHash);
+    }
+    for (const t of parsed.transactions ?? []) {
+      if (t.contractAddress && t.hash && wanted.has(t.contractAddress.toLowerCase())) hashes.add(t.hash);
+    }
+  }
+  return [...hashes];
+}
+
+/**
+ * Re-read each creating tx from the node. A hash is EVIDENCE only once the
+ * chain confirms it: mined, successful, and creating one of the three
+ * addresses being recorded — a hash copied from the wrong artifact names a
+ * contract this profile is not about.
+ */
+async function creationBlocksFromReceipts(hashes: string[]): Promise<Map<ContractKey, bigint>> {
+  const found = new Map<ContractKey, bigint>();
+  for (const hash of hashes) {
+    if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) die(`--deploy-tx: ${JSON.stringify(hash)} is not a transaction hash`);
+    const receipt = await client.getTransactionReceipt({ hash: hash as `0x${string}` }).catch(() => null);
+    if (!receipt) die(`transaction ${hash} is not on chain ${chainId} (no receipt)`);
+    const created = receipt.contractAddress ? getAddress(receipt.contractAddress) : null;
+    const key = CONTRACTS.find(({ key }) => addrs[key] === created)?.key;
+    if (!key) die(`transaction ${hash} did not create any of the three addresses being recorded`);
+    if (receipt.status !== 'success') die(`transaction ${hash} (${key}) reverted`);
+    found.set(key, receipt.blockNumber);
+  }
+  return found;
+}
+
+type CodeAt = true | false | 'pruned';
+async function codeAt(address: Address, block: bigint): Promise<CodeAt> {
+  try {
+    const c = await client.getCode({ address, blockNumber: block });
+    return c !== undefined && c !== '0x';
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/missing trie node|not available|pruned/i.test(msg)) return 'pruned';
+    throw e;
+  }
+}
+
+function prunedAt(address: Address, block: bigint): never {
+  return die(
+    `the RPC no longer holds state at block ${block}, so the block ${address} was created in\n` +
+      '         cannot be found by search (the node is pruned). Name the transaction that created it:\n' +
+      '           --deploy-tx <hash>[,<hash>…]   (its receipt is chain data and is kept by every node)',
+  );
+}
+
+async function creationBlockBySearch(address: Address, head: bigint): Promise<bigint> {
+  if ((await codeAt(address, head)) !== true) die(`${address} has no code at the head block ${head}`);
+  // Gallop back until a block WITHOUT code is found: (lo, hi] then brackets the creation.
+  let hi = head; // invariant: code at hi
+  let lo = -1n; // invariant once ≥ 0: no code at lo
+  for (let step = 64n; ; step *= 4n) {
+    const probe = hi > step ? hi - step : 0n;
+    const has = await codeAt(address, probe);
+    if (has === 'pruned') prunedAt(address, probe);
+    if (has === false) { lo = probe; break; }
+    hi = probe;
+    if (probe === 0n) return 0n; // code at genesis: a predeploy, not something we created
+  }
+  while (hi - lo > 1n) {
+    const mid = (lo + hi) / 2n;
+    const has = await codeAt(address, mid);
+    if (has === 'pruned') prunedAt(address, mid);
+    if (has) hi = mid;
+    else lo = mid;
+  }
+  return hi;
+}
+
+const head = await client.getBlockNumber();
+const creationTxs = [...artifactTxHashes(), ...(args['deploy-tx']?.split(',').map((h) => h.trim()).filter(Boolean) ?? [])];
+const created = await creationBlocksFromReceipts(creationTxs);
+for (const { key } of CONTRACTS) {
+  const fromReceipt = created.get(key);
+  if (fromReceipt !== undefined) {
+    console.log(`  ok   ${key.padEnd(10)} created in block ${fromReceipt}  (from its creation receipt)`);
+    continue;
+  }
+  const bySearch = await creationBlockBySearch(addrs[key], head);
+  created.set(key, bySearch);
+  console.log(`  ok   ${key.padEnd(10)} created in block ${bySearch}  (by eth_getCode search)`);
+}
+const deployBlock = [...created.values()].reduce((min, b) => (b < min ? b : min));
+console.log(`  ok   history starts at block ${deployBlock}\n`);
 
 // --- only now, write --------------------------------------------------------
 let next = source;
 const replaced: string[] = [];
-function swap(re: RegExp, replacement: string, label: string): void {
-  // Assert the pattern MATCHED, not that the text changed. Re-recording an
-  // address that is already correct is a legitimate no-op — treating it as a
-  // failure would make this script refuse to verify an existing deployment.
-  if (!re.test(next)) die(`could not patch ${label} — config.ts is not in the shape this script expects`);
-  const before = next;
-  next = next.replace(re, replacement);
-  replaced.push(next === before ? `${label} (already correct)` : label);
-}
-
-if (network === 'galileo') {
-  // The galileo profile is built from these three module-level constants, which
-  // are also the zero-config defaults exported to CLI users.
-  swap(/(DEFAULT_REGISTRY_ADDRESS = ')[^']+(')/, `$1${addrs.registry}$2`, 'DEFAULT_REGISTRY_ADDRESS');
-  swap(/(DEFAULT_PAYMENT_ROUTER_ADDRESS = ')[^']+(')/, `$1${addrs.router}$2`, 'DEFAULT_PAYMENT_ROUTER_ADDRESS');
-  swap(/(DEFAULT_SPEND_GUARD_ADDRESS = ')[^']+(')/, `$1${addrs.spendGuard}$2`, 'DEFAULT_SPEND_GUARD_ADDRESS');
-}
-
-// The ABI fingerprint lives inline in the profile for BOTH networks — unlike the
-// addresses, it is not something a CLI user is ever handed, so it has no
-// module-level constant to swap.
-const patchedProfile = (
-  network === 'galileo'
-    ? profileBlock
-    : // The mainnet profile carries its addresses inline, empty until deployed.
-      profileBlock
-        .replace(/(registry:\s*')[^']*(')/, `$1${addrs.registry}$2`)
-        .replace(/(router:\s*')[^']*(')/, `$1${addrs.router}$2`)
-        .replace(/(spendGuard:\s*')[^']*(')/, `$1${addrs.spendGuard}$2`)
-).replace(
-  /abiHashes:\s*\{[\s\S]*?\}(,?)/,
-  `abiHashes: {\n` +
-    `      registry: '${hashes.registry}',\n` +
-    `      router: '${hashes.router}',\n` +
-    `      spendGuard: '${hashes.spendGuard}',\n` +
-    `    }$1`,
-);
-if (patchedProfile === profileBlock) die(`could not patch the ${network} profile`);
+// Addresses, ABI fingerprint and deploy block all live inline in the profile,
+// for both networks; the exported DEFAULT_* constants are derived from the
+// default profile at module load, so nothing else in the file names an address.
+const patchedProfile = profileBlock
+  .replace(/(registry:\s*')[^']*(')/, `$1${addrs.registry}$2`)
+  .replace(/(router:\s*')[^']*(')/, `$1${addrs.router}$2`)
+  .replace(/(spendGuard:\s*')[^']*(')/, `$1${addrs.spendGuard}$2`)
+  .replace(
+    /abiHashes:\s*\{[\s\S]*?\}(,?)/,
+    `abiHashes: {\n` +
+      `      registry: '${hashes.registry}',\n` +
+      `      router: '${hashes.router}',\n` +
+      `      spendGuard: '${hashes.spendGuard}',\n` +
+      `    }$1`,
+  )
+  .replace(/deployBlock:\s*\d+/, `deployBlock: ${deployBlock}`);
+if (!/deployBlock:\s*\d+/.test(profileBlock)) die(`the ${network} profile has no deployBlock field to patch`);
+// Assert the patterns matched, not that the text changed (see `swap`).
 next = next.replace(profileBlock, patchedProfile);
-replaced.push(`${network} profile abiHashes${network === 'mainnet' ? ' + registry/router/spendGuard' : ''}`);
+replaced.push(
+  `${network} profile registry/router/spendGuard + abiHashes + deployBlock` +
+    (patchedProfile === profileBlock ? ' (already correct)' : ''),
+);
 
 writeFileSync(CONFIG, next);
 console.log(`  wrote ${path.relative(ROOT, CONFIG)}`);

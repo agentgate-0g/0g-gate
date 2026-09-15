@@ -16,6 +16,58 @@ export default function Page() {
         lede="Notable changes to AgentGate — the CLI, gateway, smart contracts and docs — newest first."
       />
 
+      <H2 id="2026-09-15-v200">2026-09-15 — v2.0.0: the default network is 0G Mainnet</H2>
+      <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-6 text-mut">
+        <li>
+          <strong className="text-white">Breaking: zero-config now means mainnet.</strong> The
+          three contracts are deployed on 0G Mainnet (blocks 44406357–44406358, source verified on
+          chainscan.0g.ai) and the hosted gateway and dashboard serve that deployment, so{' '}
+          <M>ZG_NETWORK_PROFILE</M> defaults to <M>mainnet</M>. <M>wrap</M> spends real OG. The
+          Galileo testnet set is one variable away — <M>ZG_NETWORK_PROFILE=galileo</M> — and its
+          gateway lives at <M>0g-gateway.mdloglabs.org</M>.
+        </li>
+        <li>
+          <strong className="text-white">1.x cannot read the current registries at all.</strong>{' '}
+          Every 1.x release shipped the first Galileo deployment (registry <M>0x73bf79e3…</M>),
+          whose <M>Service</M> struct predates the 17-field shape this package decodes. Against
+          the mainnet gateway a 1.x <M>buy</M> fails closed with <M>BAD_INVOICE</M> (the invoice
+          names a PaymentRouter the old client does not settle through); no money moves.
+        </li>
+        <li>
+          <strong className="text-white">A profile switch actually switched.</strong> The CLI
+          injected the Galileo registry address as a &ldquo;default&rdquo; on top of whatever
+          profile was selected, so <M>ZG_NETWORK_PROFILE=mainnet</M> read the Galileo address on
+          mainnet and found no code. The registry now comes from the profile like every other
+          chain value.
+        </li>
+        <li>
+          <strong className="text-white">History reads start at the deploy block.</strong>{' '}
+          <M>listRecentActivity</M> and the attestation tx-hash join used a rolling{' '}
+          <M>head − N</M> window that went blank whenever a service idled longer than it (twice in
+          production). Each profile records its <M>deployBlock</M>; <M>ACTIVITY_LOOKBACK_BLOCKS</M>{' '}
+          is now an opt-in cap.
+        </li>
+        <li>
+          <strong className="text-white">The public hosts moved.</strong> The gateway is{' '}
+          <M>https://0g-gateway.equiflow.xyz</M> and the dashboard{' '}
+          <M>https://agentgate.equiflow.xyz</M> — both serve mainnet, and both are the compiled-in
+          defaults (<M>DEFAULT_GATEWAY_URL</M>, <M>DEFAULT_DASHBOARD_URL</M>). The previous
+          dashboard host, <M>agentgate-0g.mdloglabs.org</M>, no longer resolves. The dashboard
+          now reads its network per request from <M>ZG_NETWORK_PROFILE</M> — one build serves
+          both instances — so every badge, explorer link and docs address describes the chain that
+          instance actually reads.
+        </li>
+        <li>
+          <strong className="text-white">Docs corrected against the shipped code.</strong> Wei
+          examples that still carried 9-decimal amounts now use 18 decimals (a copied{' '}
+          <M>maxPriceWei</M> would otherwise have capped every real invoice); the self-map body is{' '}
+          <M>{'{ upstreamUrl, timestamp, signatureHex }'}</M> (the signer is recovered from the
+          EIP-191 signature, there is no public-key field); <M>--attestor</M> and{' '}
+          <M>--payment-target</M> take EVM addresses (<M>INVALID_ADDRESS</M>); and the Foundry
+          suite is 143 tests across nine files.
+        </li>
+      </ul>
+
       <H2 id="2026-09-01-v105">2026-09-01 — v1.0.5: the dashboard link pointed at a different chain</H2>
       <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-6 text-mut">
         <li>

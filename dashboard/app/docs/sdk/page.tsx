@@ -46,12 +46,12 @@ const FULL_EXAMPLE = [
   'const client = createAgentGateClient({',
   '  chain,',
   '  signer,',
-  '  maxPriceWei: "5000000000", // 5 OG — invoices above this throw PRICE_EXCEEDED',
+  '  maxPriceWei: "5000000000000000000", // 5 OG (18 decimals) — invoices above this throw PRICE_EXCEEDED',
   '  // settleDelayMs, requestTimeoutMs, rejectPrivateHosts, fetchImpl, logger are optional',
   '});',
   '',
   '// 4. Match the URL to the mode: mock mode must target the LOCAL gateway — its 402',
-  '//    advertises network "mock", while the public gateway advertises "0g-galileo",',
+  '//    advertises network "mock", while the public gateway advertises "0g-mainnet",',
   '//    so crossing them makes parsePaymentRequired throw NETWORK_MISMATCH.',
   'const url = config.mode === "live"',
   '  ? "https://0g-gateway.equiflow.xyz/svc/1"',
@@ -91,7 +91,7 @@ const PARSE_EXAMPLE = [
   '  // Throws BAD_INVOICE on a malformed/expired challenge, NETWORK_MISMATCH',
   '  // if no accepts[] entry is on your network.',
   '  // Selects the first accepts[] entry matching chain.network + scheme:"exact-settled".',
-  '  const req = parsePaymentRequired(await res.json(), "0g-galileo");',
+  '  const req = parsePaymentRequired(await res.json(), "0g-mainnet");',
   '  console.log(req.maxAmountRequired, req.extra.nonce, req.payTo);',
   '}',
 ].join('\n');
@@ -103,19 +103,20 @@ const INVOICE_SHAPE = [
   '  "accepts": [',
   '    {',
   '      "scheme": "exact-settled",',
-  '      "network": "0g-galileo",',
-  '      "maxAmountRequired": "500000000",',
+  '      "network": "0g-mainnet",',
+  '      "maxAmountRequired": "500000000000000000",',
   '      "asset": "OG",',
   '      "payTo": "0x0000...<40 hex>",',
   '      "resource": "https://0g-gateway.equiflow.xyz/svc/1",',
   '      "description": "RWA FX & Gold Oracle",',
-  '      "maxTimeoutSeconds": 600,',
+  '      "maxTimeoutSeconds": 300,',
   '      "extra": {',
   '        "nonce": "6203715498220417",',
   '        "serviceId": 1,',
   '        "expiresAtMs": 1893456000000,',
   '        "settlement": "0g-payment-router",',
-  '        "nonceEncoding": "u64-decimal"',
+  '        "router": "0x5102EB216b65CF950D3e88c8ddD51008de0845eF",',
+  '        "nonceEncoding": "uint256-decimal"',
   '      }',
   '    }',
   '  ]',
@@ -152,7 +153,8 @@ export default function Page() {
       <Callout tone="info" title="WHERE THE CHAIN AND SIGNER COME FROM">
         The SDK does not talk to 0G directly — it depends on a <M>ChainClient</M> you build with{' '}
         <M>createChainClient(config)</M> from <M>@agentgate/chain</M>. That seam is what makes the
-        same agent code run offline (<M>AGENTGATE_MODE=mock</M>) or on 0G Galileo Testnet (<M>live</M>).
+        same agent code run offline (<M>AGENTGATE_MODE=mock</M>) or on 0G (<M>live</M> — Mainnet
+        by default, Galileo under <M>ZG_NETWORK_PROFILE=galileo</M>).
         See <DocLink href="/docs/configuration">Configuration</DocLink>.
       </Callout>
 
@@ -570,7 +572,7 @@ export default function Page() {
       <P>
         A valid 402 challenge body — the shape it validates — looks like this.{' '}
         <M>maxTimeoutSeconds</M> is gateway-configured (<M>INVOICE_TTL_MS</M>; the default is 300,
-        the public gateway runs 600) and <M>extra.expiresAtMs</M> is the invoice issue time plus
+        which the public gateway keeps) and <M>extra.expiresAtMs</M> is the invoice issue time plus
         that TTL:
       </P>
       <CodeBlock label="PaymentRequiredResponse (application/json)" code={INVOICE_SHAPE} />

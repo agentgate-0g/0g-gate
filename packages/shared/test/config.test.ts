@@ -70,12 +70,23 @@ describe('loadConfig — mock mode defaults', () => {
   });
 });
 
-describe('loadConfig — 0G Galileo network defaults', () => {
-  it('exposes the verified 0G Galileo Testnet constants', () => {
-    expect(DEFAULT_ZG_RPC_URL).toBe('https://evmrpc-testnet.0g.ai');
-    expect(DEFAULT_ZG_CHAIN_ID).toBe(16602);
-    expect(DEFAULT_ZG_NETWORK).toBe('0g-galileo');
-    expect(DEFAULT_ZG_EXPLORER_URL).toBe('https://chainscan-galileo.0g.ai');
+describe('loadConfig — 0G network defaults', () => {
+  it('the DEFAULT_* constants are the default profile — 0G Mainnet since 2026-09-15', () => {
+    // The public gateway and dashboard serve mainnet, and the CLI's zero-config
+    // chain must be the one its default gateway settles on.
+    expect(DEFAULT_ZG_RPC_URL).toBe('https://evmrpc.0g.ai');
+    expect(DEFAULT_ZG_CHAIN_ID).toBe(16661);
+    expect(DEFAULT_ZG_NETWORK).toBe('0g-mainnet');
+    expect(DEFAULT_ZG_EXPLORER_URL).toBe('https://chainscan.0g.ai');
+    expect(DEFAULT_REGISTRY_ADDRESS).toBe(NETWORK_PROFILES.mainnet!.registry);
+  });
+
+  it('keeps the verified 0G Galileo Testnet values behind the galileo profile', () => {
+    const galileo = NETWORK_PROFILES.galileo!;
+    expect(galileo.rpcUrl).toBe('https://evmrpc-testnet.0g.ai');
+    expect(galileo.chainId).toBe(16602);
+    expect(galileo.network).toBe('0g-galileo');
+    expect(galileo.explorerUrl).toBe('https://chainscan-galileo.0g.ai');
   });
 });
 
@@ -109,9 +120,9 @@ describe('loadConfig — live mode combos', () => {
       { requireStrongAdminToken: true },
     );
     expect(cfg.mode).toBe('live');
-    expect(cfg.zgRpcUrl).toBe('https://evmrpc-testnet.0g.ai');
-    expect(cfg.zgChainId).toBe(16602);
-    expect(cfg.zgNetwork).toBe('0g-galileo');
+    expect(cfg.zgRpcUrl).toBe(DEFAULT_ZG_RPC_URL);
+    expect(cfg.zgChainId).toBe(DEFAULT_ZG_CHAIN_ID);
+    expect(cfg.zgNetwork).toBe(DEFAULT_ZG_NETWORK);
   });
 
   it('throws in live mode with the default admin token (explicit)', () => {
@@ -218,22 +229,45 @@ describe('paymentRouterAddress', () => {
 
 });
 
-describe('activity lookback window', () => {
-  it('reaches days of history, not hours, at 0G block times', () => {
-    // 0G Galileo produces a block every ~0.5s (measured over 10,000 blocks).
-    // The old 50,000-block default was therefore under SEVEN HOURS of history:
-    // a service busy yesterday rendered an empty ledger today, and the UI could
-    // not tell "nothing happened" from "it scrolled out of the window".
-    // The public RPC serves a 1,000,000-block getLogs in the same ~0.8s it
-    // serves 10,000, so the window costs nothing to widen.
+describe('history window', () => {
+  it('is anchored at the deploy block and uncapped by default', () => {
+    // A rolling window empties the moment a service is idle longer than it.
+    // 50,000 blocks (seven hours at 0G's ~0.5 s blocks) did exactly that, was
+    // raised to 1,000,000 (six days), and did it again a week later. Both 0G
+    // RPCs answer a deploy-to-head eth_getLogs in under a second, so a cap buys
+    // nothing here — the feed starts where the contracts do.
     const cfg = loadConfig({ AGENTGATE_MODE: 'mock' });
-    const hours = (cfg.activityLookbackBlocks * 0.5) / 3600;
-    expect(hours).toBeGreaterThan(24 * 5);
+    expect(cfg.activityLookbackBlocks).toBeNull();
+    expect(cfg.contractsDeployBlock).toBe(NETWORK_PROFILES.mainnet!.deployBlock);
+    expect(cfg.contractsDeployBlock).toBeGreaterThan(0);
   });
 
-  it('is still overridable', () => {
-    const cfg = loadConfig({ AGENTGATE_MODE: 'mock', ACTIVITY_LOOKBACK_BLOCKS: '250' });
-    expect(cfg.activityLookbackBlocks).toBe(250);
+  it('ACTIVITY_LOOKBACK_BLOCKS is an opt-in cap for a range-limited RPC', () => {
+    expect(loadConfig({ ACTIVITY_LOOKBACK_BLOCKS: '250' }).activityLookbackBlocks).toBe(250);
+    // Blank means unset, as for every other var — NOT a zero-block window.
+    expect(loadConfig({ ACTIVITY_LOOKBACK_BLOCKS: '' }).activityLookbackBlocks).toBeNull();
+    // A zero-block cap can only ever return nothing; refuse it rather than
+    // ship a feed that is empty by configuration.
+    expect(() => loadConfig({ ACTIVITY_LOOKBACK_BLOCKS: '0' })).toThrow(/ACTIVITY_LOOKBACK_BLOCKS/);
+  });
+
+  it('the profile deploy block describes the PROFILE registry only', () => {
+    // An operator who points REGISTRY_CONTRACT_ADDRESS at their own deployment
+    // has a contract created in some other block. Starting their history at
+    // OUR deploy block would silently drop everything their registry emitted
+    // before it, so an overridden registry starts at genesis unless told where
+    // it was deployed.
+    const other = `0x${'42'.repeat(20)}`;
+    expect(loadConfig({ REGISTRY_CONTRACT_ADDRESS: other }).contractsDeployBlock).toBe(0);
+    expect(
+      loadConfig({ REGISTRY_CONTRACT_ADDRESS: other, CONTRACTS_DEPLOY_BLOCK: '123456' }).contractsDeployBlock,
+    ).toBe(123456);
+    // The profile's own registry keeps its block however the address is spelled.
+    expect(
+      loadConfig({ REGISTRY_CONTRACT_ADDRESS: DEFAULT_REGISTRY_ADDRESS.toLowerCase() }).contractsDeployBlock,
+    ).toBe(NETWORK_PROFILES.mainnet!.deployBlock);
+    // And an explicit block always wins.
+    expect(loadConfig({ CONTRACTS_DEPLOY_BLOCK: '7' }).contractsDeployBlock).toBe(7);
   });
 });
 
@@ -246,7 +280,7 @@ describe('hosted default URLs point at the 0G deployment', () => {
   const CASPER_HOSTS = [/(^|\/\/)agentgate\.mdloglabs\.org/, /(^|\/\/)gateway\.mdloglabs\.org/];
 
   it('links the dashboard to the 0G host, not the Casper one', () => {
-    expect(DEFAULT_DASHBOARD_URL).toBe('https://agentgate-0g.mdloglabs.org');
+    expect(DEFAULT_DASHBOARD_URL).toBe('https://agentgate.equiflow.xyz');
   });
 
   it('keeps every exported default URL off the Casper hosts', () => {
@@ -280,29 +314,43 @@ describe('network profiles', () => {
       ...over,
     });
 
-  it('defaults to galileo, so the zero-config read path is unchanged', () => {
+  it('defaults to mainnet — the network the hosted gateway and dashboard serve', () => {
     const cfg = live();
-    expect(cfg.zgChainId).toBe(DEFAULT_ZG_CHAIN_ID);
-    expect(cfg.zgNetwork).toBe(DEFAULT_ZG_NETWORK);
+    expect(cfg.zgChainId).toBe(16661);
+    expect(cfg.zgNetwork).toBe('0g-mainnet');
     expect(cfg.registryContractAddress).toBe(DEFAULT_REGISTRY_ADDRESS);
     expect(cfg.paymentRouterAddress).toBe(DEFAULT_PAYMENT_ROUTER_ADDRESS);
+    expect(cfg.registryContractAddress).toBe(NETWORK_PROFILES.mainnet!.registry);
   });
 
-  it('selecting mainnet moves the WHOLE tuple, never a mix of two networks', () => {
-    const cfg = live({ ZG_NETWORK_PROFILE: 'mainnet' });
-    expect(cfg.zgChainId).toBe(16661);
-    expect(cfg.zgRpcUrl).toBe('https://evmrpc.0g.ai');
-    expect(cfg.zgNetwork).toBe('0g-mainnet');
-    // The critical property: no testnet address survives the switch.
+  it('selecting galileo moves the WHOLE tuple, never a mix of two networks', () => {
+    const cfg = live({ ZG_NETWORK_PROFILE: 'galileo' });
+    expect(cfg.zgChainId).toBe(16602);
+    expect(cfg.zgRpcUrl).toBe('https://evmrpc-testnet.0g.ai');
+    expect(cfg.zgNetwork).toBe('0g-galileo');
+    // The critical property: no mainnet address survives the switch.
+    expect(cfg.registryContractAddress).toBe(NETWORK_PROFILES.galileo!.registry);
     expect(cfg.registryContractAddress).not.toBe(DEFAULT_REGISTRY_ADDRESS);
     expect(cfg.paymentRouterAddress).not.toBe(DEFAULT_PAYMENT_ROUTER_ADDRESS);
   });
 
-  it('mainnet carries no contract addresses, so it fails closed until deployed', () => {
+  it('mainnet carries its own deployment, distinct from testnet at every address', () => {
+    // Recorded by scripts/set-deployment.ts on 2026-09-15 after on-chain
+    // verification. The three must be well-formed addresses (a blank one
+    // would fail closed as "not deployed", which was the pre-deploy state) and
+    // none of them may be a Galileo address: the same address on two chains is
+    // exactly the "leftover testnet address" mistake the profiles exist to
+    // make impossible.
     const cfg = live({ ZG_NETWORK_PROFILE: 'mainnet' });
-    expect(cfg.registryContractAddress).toBe('');
-    expect(cfg.paymentRouterAddress).toBe('');
-    expect(cfg.spendGuardAddress).toBe('');
+    for (const addr of [cfg.registryContractAddress, cfg.paymentRouterAddress, cfg.spendGuardAddress]) {
+      expect(addr).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    }
+    const galileo = NETWORK_PROFILES.galileo!;
+    expect([galileo.registry, galileo.router, galileo.spendGuard]).not.toContain(cfg.registryContractAddress);
+    expect([galileo.registry, galileo.router, galileo.spendGuard]).not.toContain(cfg.paymentRouterAddress);
+    expect([galileo.registry, galileo.router, galileo.spendGuard]).not.toContain(cfg.spendGuardAddress);
+    expect(cfg.contractsDeployBlock).toBe(NETWORK_PROFILES.mainnet!.deployBlock);
+    expect(cfg.contractsDeployBlock).toBeGreaterThan(0);
   });
 
   it('rejects an unknown profile by name instead of quietly using testnet', () => {
@@ -317,6 +365,10 @@ describe('network profiles', () => {
       expect(p.network, `${name} has no network name`).not.toBe('');
       expect(p.rpcUrl).toMatch(/^https:\/\//);
       expect(p.explorerUrl).toMatch(/^https:\/\//);
+      // A deployed profile knows where its history starts; an undeployed one
+      // has no block to name and must not carry a stale one.
+      expect(Number.isSafeInteger(p.deployBlock) && p.deployBlock >= 0, `${name} deployBlock`).toBe(true);
+      expect(p.deployBlock > 0, `${name} deployBlock vs registry`).toBe(p.registry !== '');
     }
   });
 });

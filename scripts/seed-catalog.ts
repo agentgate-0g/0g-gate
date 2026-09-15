@@ -19,10 +19,18 @@
  *
  *   AGENTGATE_MODE=live npx tsx scripts/seed-catalog.ts            # plan only
  *   AGENTGATE_MODE=live npx tsx scripts/seed-catalog.ts --confirm  # register
+ *
+ * The gateway the services are mapped on (and whose base URL goes on-chain as
+ * their endpoint) defaults to the hosted gateway, which serves the DEFAULT
+ * network profile (mainnet). Another network is another gateway — name it,
+ * together with the profile:
+ *
+ *   AGENTGATE_MODE=live ZG_NETWORK_PROFILE=galileo npx tsx scripts/seed-catalog.ts \
+ *     --gateway https://<your-galileo-gateway> --confirm
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { DEFAULT_GATEWAY_URL, loadConfig } from '@agentgate/shared';
+import { DEFAULT_GATEWAY_URL, DEFAULT_ZG_NETWORK, loadConfig } from '@agentgate/shared';
 import { createChainClient } from '@agentgate/chain';
 import { wrapService } from '../packages/cli/src/wrap';
 import { sellerSigner } from '../packages/cli/src/signers';
@@ -37,6 +45,20 @@ interface Candidate {
 }
 
 const CANDIDATES: Candidate[] = [
+  // The first two were wrapped by hand on Galileo (services #1 and #2) before
+  // this script existed; they are here so a fresh network gets the same catalog.
+  {
+    name: 'USD FX Feed',
+    description: 'USD exchange rates',
+    upstreamUrl: 'https://open.er-api.com/v6/latest/USD',
+    priceOg: '0.001',
+  },
+  {
+    name: 'Crypto Spot Prices',
+    description: 'BTC/ETH spot in USD and IDR',
+    upstreamUrl: 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd,idr',
+    priceOg: '0.001',
+  },
   {
     // Named as a PROXY, not a house brand. alternative.me's FNG rules forbid
     // "a service that could be confused with our offering", and the name is the
@@ -140,7 +162,18 @@ async function main(): Promise<void> {
 
   const chain = createChainClient(config);
   const signer = sellerSigner(config);
-  const gateway = DEFAULT_GATEWAY_URL;
+  // The gateway base URL is written on-chain as every service's endpoint, so a
+  // gateway on the wrong network is a catalog that 404s for everyone who pays.
+  // The hosted default serves the default profile's network and nothing else;
+  // refuse it for any other profile rather than default to it.
+  const gatewayFlag = process.argv.indexOf('--gateway');
+  const gateway = gatewayFlag === -1 ? DEFAULT_GATEWAY_URL : (process.argv[gatewayFlag + 1] ?? '');
+  if (!/^https:\/\//.test(gateway)) throw new Error('--gateway must be an https:// URL');
+  if (config.zgNetwork !== DEFAULT_ZG_NETWORK && gateway === DEFAULT_GATEWAY_URL) {
+    throw new Error(
+      `${config.zgNetwork} needs its own gateway: ${DEFAULT_GATEWAY_URL} serves ${DEFAULT_ZG_NETWORK}. Pass --gateway <url>.`,
+    );
+  }
 
   const existing = await chain.listServices();
   const taken = new Set(existing.map((s) => normal(s.name)));

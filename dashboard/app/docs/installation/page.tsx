@@ -76,8 +76,8 @@ export default function InstallationPage() {
         ]}
       />
       <Callout tone="ok" title="Contracts are deployed">
-        The three Solidity contracts are live on 0G Galileo and the published CLI defaults to
-        them, so the read commands work with no setup at all. Everything else on this page works
+        The three Solidity contracts are live on 0G Mainnet (and Galileo) and the CLI defaults to
+        the mainnet set, so the read commands work with no setup at all. Everything else on this page works
         offline too: mock mode needs no chain, and the whole test suite (including the live
         client, against a local anvil) is green. See{' '}
         <DocLink href="/docs/deployment">Deploy</DocLink> to run your own deployment.
@@ -86,7 +86,7 @@ export default function InstallationPage() {
       <H2 id="install-cli">Install the CLI (npm)</H2>
       <P>
         Sellers who only need the <M>agentgate</M> CLI can skip the clone entirely — the published
-        CLI targets 0G Galileo Testnet and the hosted gateway by default.
+        CLI targets 0G Mainnet and the hosted gateway by default (<M>ZG_NETWORK_PROFILE=galileo</M> for the testnet).
       </P>
       <CommandBlock prompt={null} text="npx agentgate-0g@latest list" />
       <P>Or install globally:</P>
@@ -136,7 +136,7 @@ export default function InstallationPage() {
             <M key="n">@agentgate/chain</M>,
             <span key="d">
               The <M>ChainClient</M> abstraction with two implementations:{' '}
-              <M>MockChainHttpClient</M> (mock) and <M>Live0GClient</M> (0G Galileo Testnet).
+              <M>MockChainHttpClient</M> (mock) and <M>Live0gClient</M> (0G Mainnet or Galileo, by profile).
             </span>,
           ],
           [
@@ -207,7 +207,7 @@ export default function InstallationPage() {
         seam — the gateway, CLI, buyer agent and dashboard — is byte-for-byte identical in both modes.
       </P>
       <DocTable
-        head={['Aspect', 'mock', 'live (0G Galileo Testnet)']}
+        head={['Aspect', 'mock', 'live (0G Mainnet by default; ZG_NETWORK_PROFILE=galileo for the testnet)']}
         rows={[
           [
             'Chain backend',
@@ -220,8 +220,8 @@ export default function InstallationPage() {
             'What you need',
             'Nothing — every value has a default',
             <span key="l">
-              The deployed contract addresses and a non-default <M>AGENTGATE_ADMIN_TOKEN</M>{' '}
-              (config refuses the default in live). <strong className="text-white">No API key</strong>.
+              A non-default <M>AGENTGATE_ADMIN_TOKEN</M> (config refuses the default in live); the
+              contract addresses come from the selected profile. <strong className="text-white">No API key</strong>.
             </span>,
           ],
           [
@@ -257,13 +257,15 @@ export default function InstallationPage() {
         ]}
       />
       <Callout tone="ok" title="Live mode is deployable end to end">
-        Once the contracts are deployed, set <M>REGISTRY_CONTRACT_ADDRESS</M> and{' '}
-        <M>PAYMENT_ROUTER_ADDRESS</M> plus your <M>*_SIGNER_KEY</M> values in <M>.env</M>, then set{' '}
-        <M>AGENTGATE_MODE=live</M> and start the live stack with <M>npm run dev:live</M> (the one
-        script that auto-loads <M>.env</M>). The full loop (registerService, pay, recordAttestation,
-        trust score reads) runs on-chain. Real transaction links are in the repo README under
-        "Deployed addresses (0G Galileo Testnet)". Use <M>AGENTGATE_MODE=mock</M> for a keys-free
-        local run.
+        The contracts are already deployed on both networks, so put your <M>*_SIGNER_KEY</M> values
+        and a strong <M>AGENTGATE_ADMIN_TOKEN</M> in <M>.env</M>, pick the network with{' '}
+        <M>ZG_NETWORK_PROFILE</M> (<M>mainnet</M> is the default; <M>galileo</M> for faucet-funded
+        testing), then set <M>AGENTGATE_MODE=live</M> and start the live stack with{' '}
+        <M>npm run dev:live</M> (the one script that auto-loads <M>.env</M>). The full loop
+        (registerService, pay, recordAttestation, trust score reads) runs on-chain. Set{' '}
+        <M>REGISTRY_CONTRACT_ADDRESS</M> and <M>PAYMENT_ROUTER_ADDRESS</M> only for a deployment of
+        your own — the addresses for both networks are in the repo README under "Deployed
+        addresses". Use <M>AGENTGATE_MODE=mock</M> for a keys-free local run.
       </Callout>
       <P>
         The full mode matrix, guardrails and every variable are documented in{' '}
@@ -295,7 +297,7 @@ export default function InstallationPage() {
             <M key="v">AGENTGATE_MODE</M>,
             <M key="d">mock</M>,
             <span key="w">
-              Set to <M>live</M> to target 0G Galileo Testnet.
+              Set to <M>live</M> to target 0G (Mainnet by default; add <M>ZG_NETWORK_PROFILE=galileo</M> for the testnet).
             </span>,
           ],
           [

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { StatsStrip } from '@/components/stats-strip';
 import { CommandBlock } from '@/components/copy';
+import { getNetworkInfo } from '@/lib/server/chain';
 
 const LIST_CMD = 'npx agentgate-0g@latest list';
 const WRAP_CMD =
@@ -29,38 +30,45 @@ const STEPS = [
 
 const ROADMAP = [
   {
-    tag: 'NOW',
-    title: '0G Galileo Testnet · router settlement',
-    body: 'Native OG payments carrying HTTP 402 semantics, bound to their invoice by the PaymentRouter contract and verified straight from the transaction receipt. Registry + reputation contract in Solidity, no indexer and no API key in the read path.',
+    tag: 'SHIPPED',
+    title: 'Router settlement on 0G Galileo and 0G Mainnet',
+    body: 'Native OG payments carrying HTTP 402 semantics, bound to their invoice by the PaymentRouter contract and verified straight from the transaction receipt. Registry + reputation contract in Solidity, no indexer and no API key in the read path. The same contract set is deployed and source-verified on both networks.',
+    done: true,
+  },
+  {
+    tag: 'SHIPPED',
+    title: 'MCP server for any agent framework',
+    body: 'npx agentgate-0g mcp exposes discover / inspect / invoice / pay as native Model Context Protocol tools, so Claude Desktop and any MCP-capable agent can read the registry and pay for a call from a conversation. The read tools need no key at all.',
+    done: true,
+  },
+  {
+    tag: 'SHIPPED',
+    title: 'Hosted mainnet catalog',
+    body: 'The public gateway and this dashboard serve the 0G Mainnet deployment by default — a live catalog of real, paid data services settling in OG — with the Galileo testnet set kept behind ZG_NETWORK_PROFILE=galileo for free rehearsal.',
     done: true,
   },
   {
     tag: 'NEXT',
-    title: '0G Mainnet launch',
-    body: 'Audited registry deploy, real OG settlement, seller onboarding for the first indie data providers.',
+    title: 'External audit and open seller onboarding',
+    body: 'The contracts on mainnet today are self-reviewed only. An external audit before real volume, then onboarding for the first indie data providers.',
     done: false,
   },
   {
-    tag: 'Q3',
+    tag: 'NEXT',
     title: 'ERC-20 rail',
     body: 'Stablecoin pricing over the accepts[] price list the registry already stores on-chain — a client change, not a contract change.',
     done: false,
   },
   {
-    tag: 'Q3',
+    tag: 'LATER',
     title: 'SpendGuard in the request path',
-    body: 'Wire the deployed escrow spend firewall into the buyer loop: per-policy budget, per-call cap, rate window and trust floor enforced atomically on-chain.',
-    done: false,
-  },
-  {
-    tag: 'Q4',
-    title: 'MCP server',
-    body: 'A Model Context Protocol server so Claude and other agents can query the registry and pay for services natively from any conversation.',
+    body: 'Wire the deployed escrow spend firewall into the buyer loop: per-policy budget, per-call cap, rate window and trust floor enforced atomically on-chain — then staking-weighted attestations with slashing.',
     done: false,
   },
 ] as const;
 
 export default function Home() {
+  const { label } = getNetworkInfo();
   return (
     <div className="mx-auto max-w-6xl px-5 sm:px-8">
       {/* ── hero ─────────────────────────────────────────────── */}
@@ -69,7 +77,7 @@ export default function Home() {
           className="microlabel animate-fade-up text-accent"
           style={{ animationDelay: '0ms' }}
         >
-          0g galileo testnet · http 402 · on-chain reputation
+          {label.toLowerCase()} · http 402 · on-chain reputation
         </p>
         <h1
           className="mt-5 max-w-3xl animate-fade-up font-display text-4xl font-bold leading-[1.05] tracking-tight text-white sm:text-6xl"
@@ -211,7 +219,6 @@ export default function Home() {
                   }`}
                 >
                   {item.tag}
-                  {item.done ? ' · shipped' : ''}
                 </span>
                 <h3 className="mt-1 font-display text-lg font-semibold text-white">{item.title}</h3>
                 <p className="mt-1.5 max-w-2xl text-sm leading-6 text-mut">{item.body}</p>

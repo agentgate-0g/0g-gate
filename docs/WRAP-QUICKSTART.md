@@ -60,7 +60,7 @@ Output sukses terlihat seperti:
 ```
 service id:      7
 public endpoint: https://0g-gateway.equiflow.xyz/svc/7
-dashboard:       https://agentgate-0g.mdloglabs.org/services/7
+dashboard:       https://agentgate.equiflow.xyz/services/7
 register tx:     0xa1b2c3…
 explorer:        https://chainscan-galileo.0g.ai/tx/0xa1b2c3…
 ```

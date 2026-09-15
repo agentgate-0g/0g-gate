@@ -49,7 +49,7 @@ function renderTable(header: string[], rows: string[][]): string {
 function withConfigFlags(cmd: Command): Command {
   return cmd
     .option('--mode <mode>', 'chain mode: mock | live (published CLI defaults to live)')
-    .option('--rpc-url <url>', '0G Galileo RPC URL (default: https://evmrpc-testnet.0g.ai)')
+    .option('--rpc-url <url>', '0G JSON-RPC URL (default: the selected ZG_NETWORK_PROFILE\'s, mainnet https://evmrpc.0g.ai)')
     .option('--registry <address>', 'AgentGateRegistry contract address (default: the deployed one)');
 }
 

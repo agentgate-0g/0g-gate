@@ -36,7 +36,7 @@ const SDK_EXAMPLE = [
   'const client = createAgentGateClient({',
   '  chain,',
   '  signer,',
-  '  maxPriceWei: "5000000000", // 5 OG cap — invoices above this throw PRICE_EXCEEDED',
+  '  maxPriceWei: "5000000000000000000", // 5 OG cap (18 decimals) — invoices above this throw PRICE_EXCEEDED',
   '});',
   '',
   '// Discover services from the on-chain registry, pick one.',
@@ -369,7 +369,7 @@ export default function Page() {
           '  "pay(uint64,uint256,address)" \\',
           '  <extra.serviceId> <extra.nonce> <payTo> \\',
           '  --value <maxAmountRequired from the 402> \\',
-          '  --rpc-url https://evmrpc-testnet.0g.ai \\',
+          '  --rpc-url https://evmrpc.0g.ai \\',
           '  --private-key "$BUYER_SIGNER_KEY"',
         ].join('\n')}
       />
@@ -382,7 +382,7 @@ export default function Page() {
       <CodeBlock
         label="3 — redeem the proof"
         code={[
-          "PROOF=$(printf '%s' '{\"x402Version\":1,\"scheme\":\"exact-settled\",\"network\":\"0g-galileo\",",
+          "PROOF=$(printf '%s' '{\"x402Version\":1,\"scheme\":\"exact-settled\",\"network\":\"0g-mainnet\",",
           '  \"payload\":{\"transaction\":\"0x<tx-hash>\",\"nonce\":\"<nonce>\"}}\' | base64 -w0)',
           '',
           'curl -sS https://0g-gateway.equiflow.xyz/svc/1 -H "X-PAYMENT: $PROOF"',

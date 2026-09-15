@@ -10,7 +10,7 @@ Pair with [`VIDEO_SCRIPT.md`](./VIDEO_SCRIPT.md) — that is the shot list, this
 
 ## 0. Use the right hostname
 
-> ### The 0G dashboard is `agentgate-0g.mdloglabs.org`.
+> ### The 0G dashboard is `agentgate.equiflow.xyz`.
 >
 > `agentgate.mdloglabs.org` (no `0g-`) is the **older Casper dashboard**, still
 > running alongside: `/api/services` there reports `network: casper-test` with
@@ -73,8 +73,8 @@ npm run build                      # ~13 s, verified clean
 PORT=$(python3 -c "import socket;s=socket.socket();s.bind(('127.0.0.1',0));print(s.getsockname()[1]);s.close()")
 echo "dashboard → http://localhost:$PORT"
 AGENTGATE_MODE=live \
-REGISTRY_CONTRACT_ADDRESS=0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1 \
-PAYMENT_ROUTER_ADDRESS=0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F \
+REGISTRY_CONTRACT_ADDRESS=0xDB3C29a09FdDe79828208603B743E769E9f6dBEe \
+PAYMENT_ROUTER_ADDRESS=0xCC3bbd10eBA7aa24F4F722E00e714e1413182c34 \
 ZG_RPC_URL=https://evmrpc-testnet.0g.ai \
 npm start -w dashboard -- -p $PORT
 ```

@@ -85,7 +85,7 @@ export default function Page() {
 
       <Callout tone="info" title="Live-mode-only codes">
         Codes prefixed <M>TX_*</M> and <M>CONTRACT_NOT_DEPLOYED</M> only
-        appear in <M>live</M> mode (0G Galileo Testnet). In <M>mock</M> mode the chain is the in-process
+        appear in <M>live</M> mode (0G Mainnet or Galileo). In <M>mock</M> mode the chain is the in-process
         devnet and these never fire. See <DocLink href="/docs/configuration">Configuration</DocLink>{' '}
         for the mode switch.
       </Callout>
@@ -112,7 +112,7 @@ export default function Page() {
           [
             <M key="ia">INVALID_AMOUNT</M>,
             '400',
-            'A OG/wei value (e.g. --price, maxPriceWei) is not a plain non-negative decimal string within ≤ 9 decimal places. (A malformed BUYER_BUDGET_OG surfaces as CONFIG_INVALID instead.)',
+            'A OG/wei value (e.g. --price, maxPriceWei) is not a plain non-negative decimal string within ≤ 18 decimal places. (A malformed BUYER_BUDGET_OG surfaces as CONFIG_INVALID instead.)',
             'Pass a positive decimal string of OG (e.g. "0.5") or an integer wei string — no signs, exponents, or commas.',
           ],
         ]}
@@ -122,12 +122,12 @@ export default function Page() {
       <H2 id="chain">Chain / live-mode errors</H2>
       <P>
         Thrown by the live 0G client (<M>packages/chain/src/live-0g.ts</M>) when talking to the
-        public RPC or a contract. These are the failures you hit on 0G Galileo; in mock mode the
+        public RPC or a contract. These are the failures you hit on 0G; in mock mode the
         in-process devnet is used instead.
       </P>
 
       <Callout tone="ok" title="Contracts are deployed">
-        The three Solidity contracts are live on 0G Galileo and are the CLI and gateway defaults,
+        The three Solidity contracts are live on 0G Mainnet and Galileo, and the mainnet set is the CLI and gateway default,
         so <M>CONTRACT_NOT_DEPLOYED</M> (503) now means the addresses were explicitly cleared —{' '}
         <M>REGISTRY_CONTRACT_ADDRESS</M> or <M>PAYMENT_ROUTER_ADDRESS</M> set to an empty value —
         rather than a missing deployment. There is <strong className="text-white">no API key
@@ -513,7 +513,7 @@ export default function Page() {
             <M key="iamt">INVALID_AMOUNT</M>,
             '400',
             'A OG/wei string failed to parse (e.g. maxPriceWei, an amount, a transfer id) — raised by parseWei / ogToWei in @agentgate/shared. Also surfaces from the CLI (a malformed --price); a malformed BUYER_BUDGET_OG surfaces as CONFIG_INVALID instead.',
-            'Pass a non-negative decimal OG string with at most 9 decimal places (or an integer wei string).',
+            'Pass a non-negative decimal OG string with at most 18 decimal places (or an integer wei string).',
           ],
           [
             <M key="bo">BAD_OPTS</M>,
@@ -652,16 +652,16 @@ export default function Page() {
             'Pass a price > 0 OG (e.g. --price 0.5).',
           ],
           [
-            <M key="iah2">INVALID_ACCOUNT_HASH</M>,
+            <M key="iad">INVALID_ADDRESS</M>,
             '400',
-            '--payment-target was not "0x<40 hex>".',
-            'Supply a valid account hash (or omit it to derive from the signer).',
+            '--payment-target or --attestor was not a "0x"+40-hex EVM address.',
+            "Supply a valid address — or omit the flag: the payment target derives from the signer and the attestor from the gateway's /healthz.",
           ],
           [
-            <M key="ipk">INVALID_PUBLIC_KEY</M>,
+            <M key="gnm">GATEWAY_NETWORK_MISMATCH</M>,
             '400',
-            '--attestor was not a 0G public key hex ("01"+64 hex or "02"+66 hex).',
-            "Supply a valid public key hex (or omit it to use the signer's key).",
+            'The gateway named by --gateway (or the hosted default) reports on /healthz that it serves a different chain than the one wrap would register on — typically ZG_NETWORK_PROFILE=galileo with the default (mainnet) gateway. Refused before the on-chain write, so nothing was registered and no gas was spent.',
+            'Pass --gateway for a gateway on that network (the Galileo catalog is served by https://0g-gateway.mdloglabs.org), or select the gateway\u2019s network with ZG_NETWORK_PROFILE.',
           ],
           [
             <M key="sm">SIGNER_MISSING</M>,

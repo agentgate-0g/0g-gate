@@ -2,7 +2,7 @@ const MOCK_PAYER = '0x0000000000000000000000000000000000000009';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { deriveAccountAddress, startServer } from '@agentgate/devnet';
 import type { RunningServer } from '@agentgate/devnet';
-import { AgentGateError, loadConfig } from '@agentgate/shared';
+import { DEFAULT_ZG_NETWORK, AgentGateError, loadConfig } from '@agentgate/shared';
 import type { ChainClient, RegisterServiceInput, SignerRef } from '@agentgate/shared';
 import {
   Live0gClient,
@@ -121,7 +121,9 @@ describe('createChainClient', () => {
       }),
     );
     expect(live).toBeInstanceOf(Live0gClient);
-    expect(live.network).toBe('0g-galileo');
+    // The default profile's network — mainnet since 2026-09-15; pinned through
+    // the constant so this test says "the default", not "a particular chain".
+    expect(live.network).toBe(DEFAULT_ZG_NETWORK);
   });
 });
 

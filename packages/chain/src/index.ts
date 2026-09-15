@@ -17,7 +17,7 @@ export {
 /**
  * Picks the ChainClient implementation by `config.mode` (SPEC §4):
  * - 'mock' → MockChainHttpClient (REST against the local devnet at config.devnetUrl)
- * - 'live' → Live0gClient (viem against 0G Galileo Testnet)
+ * - 'live' → Live0gClient (viem against 0G — the ZG_NETWORK_PROFILE network)
  */
 export function createChainClient(config: AgentGateConfig): ChainClient {
   return config.mode === 'live'

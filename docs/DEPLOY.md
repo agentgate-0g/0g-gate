@@ -1,17 +1,20 @@
 # AgentGate — Live-mode deploy runbook
 
-> **Target: 0G Galileo Testnet** (chain ID `16602`, native OG, 18 decimals).
-> **Status: deployed and exercised.** The three contracts are live on Galileo —
-> `AgentGateRegistry` `0x73bf79e35D33Acc944542E9DA3f17058e48DE4E1`, `PaymentRouter` `0xE7C2C116869c0838Fd6dcD5FFE49F4Ac93fe1B8F`,
-> `SpendGuard` `0xBb79CaB7b02f6C0301E7E87bdDC10D4F9F5DC781` — and the full seller and buyer paths have been
-> run against them. This runbook is the recipe that produced them, kept so the deploy is
-> reproducible on a fresh key.
+> **Targets: 0G Galileo Testnet** (chain ID `16602`) and **0G Mainnet** (chain ID `16661`), native OG, 18 decimals.
+> **Status: deployed on both.** Galileo (2026-09-03, block 52865624): `AgentGateRegistry`
+> `0xDB3C29a09FdDe79828208603B743E769E9f6dBEe`, `PaymentRouter` `0xCC3bbd10eBA7aa24F4F722E00e714e1413182c34`,
+> `SpendGuard` `0xfEA4236162d7126d90D59Dc15bBb8A93b3786938` — the full seller and buyer paths have been run against
+> them. Mainnet (2026-09-15, blocks 44406357–44406358): `AgentGateRegistry`
+> `0x48144BF9d966789bf4Db4e84349d4F4878a4b7Da`, `PaymentRouter` `0x5102EB216b65CF950D3e88c8ddD51008de0845eF`,
+> `SpendGuard` `0xDfD0f8eE32Cb01015cD131d463E83e6974A9D761`, source verified on chainscan.0g.ai.
+> This runbook is the recipe that produced them, kept so the deploy is reproducible on a fresh key.
 >
 > Three things worth knowing before you start:
 >
-> 1. **The faucet caps you at 0.1 OG per wallet per day.** Deploying all three contracts costs
->    roughly **0.015 OG** at 0G's ~4 gwei priority fee — several times over inside one grant, so
->    there is no need to split the deploy across two days. Budget for **three** funded wallets
+> 1. **On Galileo the faucet caps you at 0.1 OG per wallet per day; on mainnet it is real OG.**
+>    Deploying all three contracts costs **0.0196 OG** (4,900,008 gas at 0G's ~4 gwei priority
+>    fee, measured on both networks) — five times over inside one faucet grant, so there is no
+>    need to split a testnet deploy across two days. Budget for **three** funded wallets
 >    though, one per role, because the contract will not let you collapse them:
 >    `registerService` reverts `InvalidAttestor` when the attestor equals `msg.sender` (the
 >    seller doing the registering) or equals `paymentTarget`, and `setAttestor` refuses the same
@@ -57,7 +60,7 @@ cast chain-id --rpc-url https://evmrpc-testnet.0g.ai    # → 16602
 ```bash
 cd contracts-evm
 forge build     # solc 0.8.28, optimizer 200 runs, evm_version = cancun
-forge test      # 77 tests across the five suites, must be green
+forge test      # 143 tests across nine suites, must be green
 ```
 
 Runtime bytecode is well inside EIP-170's 24,576-byte limit for all three (largest is
@@ -106,11 +109,11 @@ For a deploy that costs real money, use `runOnChain(uint256)` and the **named**
 
 ```bash
 cd contracts-evm
-ZG_EXPLORER_API_KEY=<key> forge script script/Deploy.s.sol:Deploy \
+forge script script/Deploy.s.sol:Deploy \
   --sig "runOnChain(uint256)" 16661 \
   --rpc-url mainnet --private-key "$DEPLOYER_KEY" \
   --priority-gas-price 4000000000 --with-gas-price 6000000000 \
-  --broadcast --verify --verifier etherscan
+  --broadcast
 ```
 
 Two things that are easy to skip and expensive to skip:
@@ -120,22 +123,29 @@ Two things that are easy to skip and expensive to skip:
   `"${ZG_RPC_URL}"`, so `--rpc-url galileo` deploys wherever that variable
   happens to point — an operator with mainnet exported deploys to mainnet while
   every word on screen says testnet. These contracts are immutable and permanent.
-- **`--verify`** is not optional for a contract that holds money. Three addresses
-  whose source nobody can read is not a shippable state. Note the verifier base
-  is `/open/api`, **not** `/api` — `/api` serves the explorer's single-page app,
-  so a deploy "verified" against it was never verified at all. `foundry.toml`
-  now carries the corrected URL for both networks.
+- **Verification** is not optional for a contract that holds money. Three
+  addresses whose source nobody can read is not a shippable state. It is a
+  separate step, because Foundry's built-in `etherscan` verifier (what
+  `--verify` on the script uses) rejects chain 16661 as unsupported; the
+  **custom** verifier against the explorer's `/open/api` base is what verified
+  the 2026-09-15 mainnet set and the Galileo set. Note the base is `/open/api`,
+  **not** `/api` — `/api` serves the explorer's single-page app, so a deploy
+  "verified" against it was never verified at all.
 
-If verification is skipped or fails, each contract can be verified afterwards
-against the same profile:
+Verify each contract right after the broadcast (the explorer takes any
+non-empty API key; `--watch` polls until the explorer answers):
 
 ```bash
-forge verify-contract --chain 16661 <addr> src/PaymentRouter.sol:PaymentRouter
-forge verify-contract --chain 16661 <addr> src/AgentGateRegistry.sol:AgentGateRegistry \
+V="--verifier custom --verifier-url https://chainscan.0g.ai/open/api --verifier-api-key placeholder --chain-id 16661 --watch"
+forge verify-contract $V <router>   src/PaymentRouter.sol:PaymentRouter
+forge verify-contract $V <registry> src/AgentGateRegistry.sol:AgentGateRegistry \
   --constructor-args $(cast abi-encode "constructor(address)" <router>)
-forge verify-contract --chain 16661 <addr> src/SpendGuard.sol:SpendGuard \
+forge verify-contract $V <guard>    src/SpendGuard.sol:SpendGuard \
   --constructor-args $(cast abi-encode "constructor(address)" <registry>)
 ```
+
+For Galileo, swap the URL for `https://chainscan-galileo.0g.ai/open/api` and the
+chain id for `16602`.
 
 Then confirm on the explorer that all three show verified source before
 announcing the addresses anywhere.
@@ -170,7 +180,11 @@ Record them in **three** places:
 2. the address tables in [`contracts-evm/README.md`](../contracts-evm/README.md) and
    [`README.md`](../README.md), with `https://chainscan-galileo.0g.ai/address/<addr>` links,
 3. `DEFAULT_REGISTRY_ADDRESS` in `packages/shared/src/config.ts`, so the published CLI targets
-   the deployment with zero configuration.
+   the deployment with zero configuration — via `npx tsx scripts/set-deployment.ts`, which
+   verifies the three on the chain first and records, next to them, the block they were created
+   in (`deployBlock`). Every `eth_getLogs` history read starts there, so a wrong block silently
+   hides the deployment's earliest events; the script bisects `eth_getCode` for it rather than
+   trusting a pasted number.
 
 Verify each address resolves on <https://chainscan-galileo.0g.ai>.
 
@@ -185,7 +199,7 @@ ZG_EXPLORER_URL=https://chainscan-galileo.0g.ai
 REGISTRY_CONTRACT_ADDRESS=<from step 4>
 PAYMENT_ROUTER_ADDRESS=<from step 4>
 SPEND_GUARD_ADDRESS=<from step 4>
-ACTIVITY_LOOKBACK_BLOCKS=50000
+CONTRACTS_DEPLOY_BLOCK=                       # only if these addresses are NOT the profile's: the block they were deployed in (the receipt's blockNumber in contracts-evm/broadcast/…/run-latest.json)
 GATE_SIGNER_KEY=0x…  BUYER_SIGNER_KEY=0x…  SELLER_SIGNER_KEY=0x…
 AGENTGATE_ADMIN_TOKEN=<strong unique token>   # loadConfig() refuses the default in live mode
 INVOICE_STORE_PATH=<abs path>/data/gateway-invoices.json   # live mode refuses to boot without it

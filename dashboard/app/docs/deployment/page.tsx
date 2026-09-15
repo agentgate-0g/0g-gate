@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { DEFAULT_PAYMENT_ROUTER_ADDRESS, DEFAULT_REGISTRY_ADDRESS, DEFAULT_SPEND_GUARD_ADDRESS } from '@agentgate/shared';
+import { NETWORK_PROFILES } from '@agentgate/shared';
 import {
   Callout,
   CodeBlock,
@@ -92,8 +92,8 @@ export default function DeploymentPage() {
       <Callout tone="warn" title="devnet is a mock chain">
         The <M>packages/devnet</M> image is for the self-contained demo only (see{' '}
         <M>docker-compose.hosting.yml</M> and its Dockerfile comment: &ldquo;a live deployment never
-        runs this image&rdquo;). In <M>live</M> mode the gateway talks to 0G Galileo Testnet via{' '}
-        <M>ZG_RPC_URL</M> — there is no devnet to point at, and exposing one would
+        runs this image&rdquo;). In <M>live</M> mode the gateway talks to 0G (Mainnet or Galileo, by{' '}
+        <M>ZG_NETWORK_PROFILE</M>) via <M>ZG_RPC_URL</M> — there is no devnet to point at, and exposing one would
         be a mock chain serving real-looking data.
       </Callout>
 
@@ -326,7 +326,7 @@ export default function DeploymentPage() {
         rows={[
           [
             <M key="v">AGENTGATE_MODE=live</M>,
-            'Selects the 0G Galileo Testnet backend (viem against the public RPC) instead of the in-memory devnet.',
+            'Selects the 0G backend (viem against the public RPC of the selected ZG_NETWORK_PROFILE — mainnet by default, galileo for the testnet) instead of the in-memory devnet.',
           ],
           [
             <M key="v">GATE_SIGNER_KEY</M>,
@@ -398,9 +398,11 @@ export default function DeploymentPage() {
         ]}
       />
       <P>
-        The 0G endpoints have working Testnet defaults you usually keep:{' '}
-        <M>ZG_RPC_URL</M>, <M>ZG_CHAIN_ID=16602</M>, <M>ZG_NETWORK=0g-galileo</M>,{' '}
-        <M>ZG_EXPLORER_URL</M>. The full variable reference, including types, defaults and
+        The 0G endpoints come from the selected profile and you usually keep them:{' '}
+        <M>ZG_NETWORK_PROFILE=mainnet</M> (the default) means <M>ZG_CHAIN_ID=16661</M>,{' '}
+        <M>ZG_NETWORK=0g-mainnet</M>, <M>ZG_RPC_URL=https://evmrpc.0g.ai</M> and the mainnet
+        contract set; <M>ZG_NETWORK_PROFILE=galileo</M> swaps all of them for the testnet set
+        (chain <M>16602</M>). The full variable reference, including types, defaults and
         validation rules, is in <DocLink href="/docs/configuration">Configuration</DocLink>.
       </P>
       <Callout tone="info" title="how the guardrails read in code">
@@ -442,11 +444,11 @@ export default function DeploymentPage() {
       <CodeBlock
         label="healthy gateway"
         code={
-          'GET /healthz  →  200  {"ok":true,"network":"0g-galileo"}\n' +
-          'GET /readyz   →  200  {"ready":true,"network":"0g-galileo"}\n' +
+          'GET /healthz  →  200  {"ok":true,"network":"0g-mainnet","attestor":"0x71a8…7bae"}\n' +
+          'GET /readyz   →  200  {"ready":true,"network":"0g-mainnet"}\n' +
           '\n' +
-          '# chain unreachable\n' +
-          'GET /readyz   →  503  {"ready":false}'
+          '# chain unreachable, wrong chain id, or no code at the contract addresses\n' +
+          'GET /readyz   →  503  {"ready":false,"reason":"chain_unreachable"}'
         }
       />
       <Callout tone="info" title="probe choice matters">
@@ -512,25 +514,37 @@ export default function DeploymentPage() {
       </P>
 
       <H2 id="contract-status">Contract status and what is deferred</H2>
-      <Callout tone="ok" title="Contracts are deployed">
-        The three Solidity contracts are live on 0G Galileo Testnet (network <M>0g-galileo</M>,
-        chain id <M>16602</M>) and are compiled into the CLI and gateway as defaults:{' '}
-        <M>{DEFAULT_REGISTRY_ADDRESS}</M> (registry),{' '}
-        <M>{DEFAULT_PAYMENT_ROUTER_ADDRESS}</M> (router) and{' '}
-        <M>{DEFAULT_SPEND_GUARD_ADDRESS}</M> (spend guard). Set{' '}
+      <Callout tone="ok" title="Contracts are deployed on both 0G networks">
+        The same three Solidity contracts — byte-identical, source-verified on both explorers — are
+        live on 0G Galileo Testnet and on 0G Mainnet. <M>ZG_NETWORK_PROFILE</M> selects the set
+        (<M>mainnet</M> is the compiled-in default for the CLI and gateway; <M>galileo</M> keeps the testnet set); set{' '}
         <M>REGISTRY_CONTRACT_ADDRESS</M> and <M>PAYMENT_ROUTER_ADDRESS</M> in <M>.env</M> only to
         point at a deployment of your own. See{' '}
         <DocLink href="/docs/contract#build-deploy">Contract → Build and deploy</DocLink>.
       </Callout>
+      <DocTable
+        head={['Network', 'Chain id', 'Registry', 'Router', 'Spend guard', 'Deployed in block']}
+        rows={Object.entries(NETWORK_PROFILES).map(([name, p]) => [
+          <span key="n">
+            <M>{name}</M> · {p.network}
+          </span>,
+          <M key="c">{String(p.chainId)}</M>,
+          <M key="r">{p.registry}</M>,
+          <M key="o">{p.router}</M>,
+          <M key="g">{p.spendGuard}</M>,
+          <M key="b">{String(p.deployBlock)}</M>,
+        ])}
+      />
       <DocTable
         head={['Item', 'Status']}
         rows={[
           [
             'Contract deployment',
             <span key="s">
-              <strong className="text-white">Done.</strong> All three are broadcast to 0G Galileo
-              and pass 77 <M>forge test</M> cases; the seller and buyer paths have been run against
-              them end to end. See{' '}
+              <strong className="text-white">Done, on both networks.</strong> All three are
+              broadcast to 0G Galileo (2026-09-03) and 0G Mainnet (2026-09-15) and pass the Foundry
+              suite; the seller and buyer paths have been run end to end on Galileo. The mainnet
+              set is self-reviewed only — no external audit has been performed. See{' '}
               <DocLink href="/docs/contract#build-deploy">Contract → Build and deploy</DocLink>.
             </span>,
           ],

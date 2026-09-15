@@ -85,7 +85,8 @@ ZG_EXPLORER_URL=https://chainscan-galileo.0g.ai
 REGISTRY_CONTRACT_ADDRESS=
 PAYMENT_ROUTER_ADDRESS=
 SPEND_GUARD_ADDRESS=
-ACTIVITY_LOOKBACK_BLOCKS=50000
+CONTRACTS_DEPLOY_BLOCK=                       # only with your OWN contracts: the block they were deployed in (the profile knows its own)
+ACTIVITY_LOOKBACK_BLOCKS=                     # leave unset; an optional cap for an RPC that rejects wide getLogs ranges
 GATE_SIGNER_KEY=                              # middleware/attestor key (0x + 64 hex) -- NEVER commit
 BUYER_SIGNER_KEY=                             # buyer key (0x + 64 hex) -- NEVER commit -- buyer agent + `agentgate buy` (also via --key)
 SELLER_SIGNER_KEY=                            # CLI / seller key (0x + 64 hex) -- NEVER commit
@@ -261,7 +262,7 @@ Mirrors the on-chain rules of the Solidity contract (auth, duplicate attestation
 - `createChainClient(config): ChainClient` — picks impl by `config.mode`.
 - `MockChainHttpClient` — fetch against `DEVNET_URL`, maps REST ↔ `ChainClient`. Address derivation helper `mockAccountAddress(publicKey)` = `0x` + the first 40 hex of sha256(publicKey) — the same shape as a real EVM address, so mock and live exercise one address code path.
 - `Live0gClient` — viem against the public 0G RPC. **No indexer and no API key anywhere in the read path:**
-  - reads: `getService` / `getScore` / `getAttestations` are contract view calls; `listServices` is `servicesCount()` + N `getService` (multicall-batched); `getBalance` is `eth_getBalance`; `listRecentActivity` is `eth_getLogs` over the three event topics within `ACTIVITY_LOOKBACK_BLOCKS`.
+  - reads: `getService` / `getScore` / `getAttestations` are contract view calls; `listServices` is `servicesCount()` + N `getService` (multicall-batched); `getBalance` is `eth_getBalance`; `listRecentActivity` is `eth_getLogs` over the three event topics from the contracts' deploy block (`CONTRACTS_DEPLOY_BLOCK`, recorded per profile) to the head — the deployment's whole history, never a rolling slice of it, so an idle week cannot empty the feed. `ACTIVITY_LOOKBACK_BLOCKS` is an optional cap for an RPC that rejects wide ranges; both 0G RPCs answer a deploy-to-head query in under a second.
   - `verifyTransfer` is one `eth_getTransactionReceipt` on the hash the buyer presented, then an exact match against the `Paid` logs in that receipt — keeping only logs emitted by the configured `PaymentRouter` (the hash is buyer-supplied, so any other contract could mint a look-alike event), then `payTo` → `(serviceId, nonce)` → amount → age. Binding on `(serviceId, nonce)` — not nonce alone — because one payment target is shared across services. A missing receipt is `pending` (retryable), never `not_found`; an RPC outage propagates rather than masquerading as `pending`.
   - writes: `PaymentRouter.pay` for payments; `registerService` / `recordAttestation` / `setActive` against `REGISTRY_CONTRACT_ADDRESS`. Every write waits for the receipt and throws on a reverted status rather than reporting success.
   - Anything that requires the not-yet-deployed contract throws `AgentGateError('CONTRACT_NOT_DEPLOYED', …, 503)` when `REGISTRY_CONTRACT_ADDRESS` / `PAYMENT_ROUTER_ADDRESS` is unset, with the call path otherwise fully implemented and tested against a locally deployed contract on `anvil`.

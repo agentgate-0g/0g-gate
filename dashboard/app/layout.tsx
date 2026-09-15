@@ -3,8 +3,17 @@ import type { ReactNode } from 'react';
 import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
 import { Nav } from '@/components/nav';
 import { Footer } from '@/components/footer';
+import { NetworkProvider } from '@/components/network-context';
+import { getNetworkInfo } from '@/lib/server/chain';
 import { SITE_URL } from '@/lib/seo';
 import './globals.css';
+
+// The network is read from the process environment on every request, never
+// baked in at build time: one `next build` serves both the Galileo and the
+// mainnet instance (they differ only by ZG_NETWORK_PROFILE), so a statically
+// rendered layout would label every instance with whatever the build machine
+// happened to have set.
+export const dynamic = 'force-dynamic';
 
 const display = Space_Grotesk({ subsets: ['latin'], variable: '--font-display' });
 const body = Inter({ subsets: ['latin'], variable: '--font-body' });
@@ -65,6 +74,7 @@ const jsonLd = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
+  const network = getNetworkInfo();
   return (
     <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
       <body className="flex min-h-screen flex-col bg-ink font-sans text-zinc-200 antialiased">
@@ -78,9 +88,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         >
           Skip to content
         </a>
-        <Nav />
-        <main id="main" className="flex-1">{children}</main>
-        <Footer />
+        <NetworkProvider value={network}>
+          <Nav />
+          <main id="main" className="flex-1">{children}</main>
+          <Footer />
+        </NetworkProvider>
       </body>
     </html>
   );
