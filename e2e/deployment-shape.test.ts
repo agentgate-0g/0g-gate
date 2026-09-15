@@ -1,14 +1,27 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { missingSelectors, REGISTRY_ABI, SPEND_GUARD_ABI } from '@agentgate/chain';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const CONTRACTS = path.join(REPO, 'contracts-evm');
+
+// The artifacts under contracts-evm/out are gitignored build output, so a fresh
+// checkout has none — and the chain suites' `forge create` calls, which do
+// compile, run in other vitest workers, so whether the file exists when this
+// one reads it was a race (CI lost it: the registry artifact had landed, the
+// guard's had not). Compile here, once; with a warm cache forge answers "No
+// files changed" in well under a second. Foundry is already required for a
+// full `npm test`, the same as for those suites.
+beforeAll(() => {
+  execFileSync('forge', ['build', '--silent'], { cwd: CONTRACTS, stdio: 'inherit' });
+}, 120_000);
 
 /** The runtime bytecode Foundry compiled for `name` — what `eth_getCode` returns. */
 function deployedBytecode(name: string): string {
-  const artifact = path.join(REPO, 'contracts-evm/out', `${name}.sol`, `${name}.json`);
+  const artifact = path.join(CONTRACTS, 'out', `${name}.sol`, `${name}.json`);
   return JSON.parse(readFileSync(artifact, 'utf8')).deployedBytecode.object as string;
 }
 
