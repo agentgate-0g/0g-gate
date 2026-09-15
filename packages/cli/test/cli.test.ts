@@ -157,7 +157,7 @@ describe('wrapService attestor defaulting', () => {
   function healthyGateway(attestor?: string) {
     return makeFakeFetch((url: string) =>
       url.endsWith('/healthz')
-        ? new Response(JSON.stringify({ ok: true, network: '0g-galileo', ...(attestor ? { attestor } : {}) }), {
+        ? new Response(JSON.stringify({ ok: true, network: 'mock', ...(attestor ? { attestor } : {}) }), {
             status: 200,
             headers: { 'content-type': 'application/json' },
           })
@@ -231,6 +231,46 @@ describe('wrapService attestor defaulting', () => {
     expect(probe).toBeDefined();
     expect(probe!.url).toBe('http://gw.example:4021/healthz');
     expect(probe!.init?.method ?? 'GET').toBe('GET');
+  });
+
+  it('refuses to register when the gateway serves a different network', async () => {
+    // Since the default profile became mainnet, `ZG_NETWORK_PROFILE=galileo wrap`
+    // without --gateway registers on Galileo and then maps on the MAINNET
+    // gateway (the compiled-in default). The registration is irreversible and
+    // costs gas; the mapping 404s; the seller has paid for a service no gateway
+    // will ever serve. The gateway says which chain it serves on /healthz, so
+    // the mismatch is knowable before the write — and must stop it.
+    const chain = makeFakeChain(); // network: 'mock'
+    const { impl } = makeFakeFetch((url: string) =>
+      url.endsWith('/healthz')
+        ? new Response(JSON.stringify({ ok: true, network: '0g-mainnet', attestor: GATEWAY_ATTESTOR }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        : new Response(null, { status: 204 }),
+    );
+    await expect(wrapService(baseWrapOpts(chain, impl))).rejects.toMatchObject({
+      code: 'GATEWAY_NETWORK_MISMATCH',
+      message: expect.stringMatching(/0g-mainnet[\s\S]*mock|mock[\s\S]*0g-mainnet/),
+    });
+    expect(chain.registered).toHaveLength(0); // nothing was written on-chain
+  });
+
+  it('still registers when the gateway does not say which network it serves', async () => {
+    // An older gateway's /healthz carries no network field; that is not a
+    // mismatch, and must not block a seller who is running one.
+    const chain = makeFakeChain();
+    const { impl } = makeFakeFetch((url: string) =>
+      url.endsWith('/healthz')
+        ? new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        : new Response(null, { status: 204 }),
+    );
+    await expect(wrapService(baseWrapOpts(chain, impl))).resolves.toMatchObject({
+      serviceId: expect.any(Number),
+    });
   });
 
   it('still registers when the health probe fails outright', async () => {
